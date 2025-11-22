@@ -1,6 +1,6 @@
 // src/contexts/SocialContext.js
 import React, { createContext, useContext, useState, useEffect, useCallback, useMemo } from 'react';
-import { ref, set, get, onValue, off, query, orderByChild, equalTo, update, remove } from 'firebase/database';
+import { ref, set, get, onValue, query, orderByChild, equalTo, update, remove } from 'firebase/database';
 import { database } from '../config/firebase';
 import { useAuth } from './AuthContext';
 import toast from 'react-hot-toast';
@@ -18,6 +18,7 @@ export const useSocial = () => {
 
 export const SocialProvider = ({ children }) => {
   const { currentUser, userProfile } = useAuth();
+  const dbAccessDeniedRef = React.useRef(false);
   const [friends, setFriends] = useState([]);
   const [friendRequests, setFriendRequests] = useState([]);
   const [chats, setChats] = useState([]);
@@ -250,6 +251,7 @@ export const SocialProvider = ({ children }) => {
   // Actualizar estado en línea
   const updateOnlineStatus = useCallback(async (isOnline) => {
     if (!currentUser || !userProfile) return;
+    if (dbAccessDeniedRef.current) return; // Evitar intentos si DB denegó permisos
 
     try {
       const statusData = {
@@ -268,112 +270,202 @@ export const SocialProvider = ({ children }) => {
   // Cargar datos cuando el usuario esté autenticado
   useEffect(() => {
     if (currentUser) {
+      if (dbAccessDeniedRef.current) {
+        // Si detectamos que la DB niega permisos, evitamos reintentar listeners
+        console.warn('Acceso a Realtime Database denegado — listeners omitidos');
+        return;
+      }
       // Actualizar estado en línea
       updateOnlineStatus(true);
 
       // Listener para amigas
+      let friendshipsUnsubscribe, requestsUnsubscribe, chatsUnsubscribe, statusUnsubscribe, notesUnsubscribe;
       const friendshipsRef = ref(database, `friendships/${currentUser.uid}`);
-      const friendshipsUnsubscribe = onValue(friendshipsRef, async (snapshot) => {
-        if (snapshot.exists()) {
-          const friendshipsData = snapshot.val();
-          const friendIds = Object.keys(friendshipsData);
-          
-          // Obtener datos de las amigas
-          const friendsData = [];
-          for (const friendId of friendIds) {
-            const friendRef = ref(database, `users/${friendId}`);
-            const friendSnapshot = await get(friendRef);
-            if (friendSnapshot.exists()) {
-              friendsData.push({
-                id: friendId,
-                ...friendSnapshot.val(),
-                friendship: friendshipsData[friendId]
-              });
+      friendshipsUnsubscribe = onValue(
+        friendshipsRef,
+        async (snapshot) => {
+          if (snapshot.exists()) {
+            const friendshipsData = snapshot.val();
+            const friendIds = Object.keys(friendshipsData);
+
+            // Obtener datos de las amigas
+            const friendsData = [];
+            for (const friendId of friendIds) {
+              try {
+                const friendRef = ref(database, `users/${friendId}`);
+                const friendSnapshot = await get(friendRef);
+                if (friendSnapshot.exists()) {
+                  friendsData.push({
+                    id: friendId,
+                    ...friendSnapshot.val(),
+                    friendship: friendshipsData[friendId]
+                  });
+                }
+              } catch (err) {
+                console.warn('Error obteniendo datos de la amiga', friendId, err);
+              }
             }
+
+            setFriends(friendsData);
+          } else {
+            setFriends([]);
           }
-          
-          setFriends(friendsData);
-        } else {
+        },
+        (error) => {
+          console.warn('Firebase friendships listener error', error);
           setFriends([]);
+          if (error && /permission_denied/i.test(error.message || error.code || '')) {
+            dbAccessDeniedRef.current = true;
+            toast.error('Acceso a la base de datos denegado. Revisa las reglas de Firebase.');
+            try { if (typeof friendshipsUnsubscribe === 'function') friendshipsUnsubscribe(); } catch (e) {}
+            try { if (typeof requestsUnsubscribe === 'function') requestsUnsubscribe(); } catch (e) {}
+            try { if (typeof chatsUnsubscribe === 'function') chatsUnsubscribe(); } catch (e) {}
+            try { if (typeof statusUnsubscribe === 'function') statusUnsubscribe(); } catch (e) {}
+            try { if (typeof notesUnsubscribe === 'function') notesUnsubscribe(); } catch (e) {}
+          }
         }
-      });
+      );
 
       // Listener para solicitudes de amistad
       const requestsRef = ref(database, `friendRequests/${currentUser.uid}`);
-      const requestsUnsubscribe = onValue(requestsRef, (snapshot) => {
-        if (snapshot.exists()) {
-          const requestsData = Object.entries(snapshot.val()).map(([id, data]) => ({
-            id,
-            ...data
-          }));
-          setFriendRequests(requestsData);
-        } else {
+      requestsUnsubscribe = onValue(
+        requestsRef,
+        (snapshot) => {
+          if (snapshot.exists()) {
+            const requestsData = Object.entries(snapshot.val()).map(([id, data]) => ({
+              id,
+              ...data
+            }));
+            setFriendRequests(requestsData);
+          } else {
+            setFriendRequests([]);
+          }
+        },
+        (error) => {
+          console.warn('Firebase friendRequests listener error', error);
           setFriendRequests([]);
+          if (error && /permission_denied/i.test(error.message || error.code || '')) {
+            dbAccessDeniedRef.current = true;
+            toast.error('Acceso a la base de datos denegado. Revisa las reglas de Firebase.');
+            try { if (typeof friendshipsUnsubscribe === 'function') friendshipsUnsubscribe(); } catch (e) {}
+            try { if (typeof requestsUnsubscribe === 'function') requestsUnsubscribe(); } catch (e) {}
+            try { if (typeof chatsUnsubscribe === 'function') chatsUnsubscribe(); } catch (e) {}
+            try { if (typeof statusUnsubscribe === 'function') statusUnsubscribe(); } catch (e) {}
+            try { if (typeof notesUnsubscribe === 'function') notesUnsubscribe(); } catch (e) {}
+          }
         }
-      });
+      );
 
       // Listener para chats
       const chatsRef = ref(database, 'chats');
       const chatsQuery = query(chatsRef, orderByChild('participants'));
-      const chatsUnsubscribe = onValue(chatsQuery, (snapshot) => {
-        if (snapshot.exists()) {
-          const chatsData = [];
-          snapshot.forEach((childSnapshot) => {
-            const chat = childSnapshot.val();
-            if (chat.participants && chat.participants.includes(currentUser.uid)) {
-              chatsData.push({
-                id: childSnapshot.key,
-                ...chat
-              });
-            }
-          });
-          setChats(chatsData);
-        } else {
+      chatsUnsubscribe = onValue(
+        chatsQuery,
+        (snapshot) => {
+          if (snapshot.exists()) {
+            const chatsData = [];
+            snapshot.forEach((childSnapshot) => {
+              const chat = childSnapshot.val();
+              if (chat.participants && chat.participants.includes(currentUser.uid)) {
+                chatsData.push({
+                  id: childSnapshot.key,
+                  ...chat
+                });
+              }
+            });
+            setChats(chatsData);
+          } else {
+            setChats([]);
+          }
+        },
+        (error) => {
+          console.warn('Firebase chats listener error', error);
           setChats([]);
+          if (error && /permission_denied/i.test(error.message || error.code || '')) {
+            dbAccessDeniedRef.current = true;
+            toast.error('Acceso a la base de datos denegado. Revisa las reglas de Firebase.');
+            try { if (typeof friendshipsUnsubscribe === 'function') friendshipsUnsubscribe(); } catch (e) {}
+            try { if (typeof requestsUnsubscribe === 'function') requestsUnsubscribe(); } catch (e) {}
+            try { if (typeof chatsUnsubscribe === 'function') chatsUnsubscribe(); } catch (e) {}
+            try { if (typeof statusUnsubscribe === 'function') statusUnsubscribe(); } catch (e) {}
+            try { if (typeof notesUnsubscribe === 'function') notesUnsubscribe(); } catch (e) {}
+          }
         }
-      });
+      );
 
       // Listener para usuarios en línea
       const statusRef = ref(database, 'userStatus');
-      const statusUnsubscribe = onValue(statusRef, (snapshot) => {
-        if (snapshot.exists()) {
-          const statusData = Object.values(snapshot.val()).filter(user => 
-            user.isOnline && user.userId !== currentUser.uid
-          );
-          setOnlineUsers(statusData);
-        } else {
+      statusUnsubscribe = onValue(
+        statusRef,
+        (snapshot) => {
+          if (snapshot.exists()) {
+            const statusData = Object.values(snapshot.val()).filter(user => 
+              user.isOnline && user.userId !== currentUser.uid
+            );
+            setOnlineUsers(statusData);
+          } else {
+            setOnlineUsers([]);
+          }
+        },
+        (error) => {
+          console.warn('Firebase userStatus listener error', error);
           setOnlineUsers([]);
+          if (error && /permission_denied/i.test(error.message || error.code || '')) {
+            dbAccessDeniedRef.current = true;
+            toast.error('Acceso a la base de datos denegado. Revisa las reglas de Firebase.');
+            try { if (typeof friendshipsUnsubscribe === 'function') friendshipsUnsubscribe(); } catch (e) {}
+            try { if (typeof requestsUnsubscribe === 'function') requestsUnsubscribe(); } catch (e) {}
+            try { if (typeof chatsUnsubscribe === 'function') chatsUnsubscribe(); } catch (e) {}
+            try { if (typeof statusUnsubscribe === 'function') statusUnsubscribe(); } catch (e) {}
+            try { if (typeof notesUnsubscribe === 'function') notesUnsubscribe(); } catch (e) {}
+          }
         }
-      });
+      );
 
       // Listener para notas compartidas
       const notesRef = ref(database, 'sharedNotes');
-      const notesUnsubscribe = onValue(notesRef, (snapshot) => {
-        if (snapshot.exists()) {
-          const notesData = [];
-          snapshot.forEach((childSnapshot) => {
-            const note = childSnapshot.val();
-            if (note.sharedWith && note.sharedWith.includes(currentUser.uid)) {
-              notesData.push({
-                id: childSnapshot.key,
-                ...note
-              });
-            }
-          });
-          setNotes(notesData);
-        } else {
+      notesUnsubscribe = onValue(
+        notesRef,
+        (snapshot) => {
+          if (snapshot.exists()) {
+            const notesData = [];
+            snapshot.forEach((childSnapshot) => {
+              const note = childSnapshot.val();
+              if (note.sharedWith && note.sharedWith.includes(currentUser.uid)) {
+                notesData.push({
+                  id: childSnapshot.key,
+                  ...note
+                });
+              }
+            });
+            setNotes(notesData);
+          } else {
+            setNotes([]);
+          }
+        },
+        (error) => {
+          console.warn('Firebase sharedNotes listener error', error);
           setNotes([]);
+          if (error && /permission_denied/i.test(error.message || error.code || '')) {
+            dbAccessDeniedRef.current = true;
+            toast.error('Acceso a la base de datos denegado. Revisa las reglas de Firebase.');
+            try { if (typeof friendshipsUnsubscribe === 'function') friendshipsUnsubscribe(); } catch (e) {}
+            try { if (typeof requestsUnsubscribe === 'function') requestsUnsubscribe(); } catch (e) {}
+            try { if (typeof chatsUnsubscribe === 'function') chatsUnsubscribe(); } catch (e) {}
+            try { if (typeof statusUnsubscribe === 'function') statusUnsubscribe(); } catch (e) {}
+            try { if (typeof notesUnsubscribe === 'function') notesUnsubscribe(); } catch (e) {}
+          }
         }
-      });
+      );
 
       // Cleanup al desmontar
       return () => {
         updateOnlineStatus(false);
-        off(friendshipsRef, 'value', friendshipsUnsubscribe);
-        off(requestsRef, 'value', requestsUnsubscribe);
-        off(chatsRef, 'value', chatsUnsubscribe);
-        off(statusRef, 'value', statusUnsubscribe);
-        off(notesRef, 'value', notesUnsubscribe);
+        try { if (typeof friendshipsUnsubscribe === 'function') friendshipsUnsubscribe(); } catch (e) { console.warn('Error cleaning friendships listener', e); }
+        try { if (typeof requestsUnsubscribe === 'function') requestsUnsubscribe(); } catch (e) { console.warn('Error cleaning requests listener', e); }
+        try { if (typeof chatsUnsubscribe === 'function') chatsUnsubscribe(); } catch (e) { console.warn('Error cleaning chats listener', e); }
+        try { if (typeof statusUnsubscribe === 'function') statusUnsubscribe(); } catch (e) { console.warn('Error cleaning status listener', e); }
+        try { if (typeof notesUnsubscribe === 'function') notesUnsubscribe(); } catch (e) { console.warn('Error cleaning notes listener', e); }
       };
     }
   }, [currentUser, userProfile?.name, updateOnlineStatus]);
@@ -382,19 +474,26 @@ export const SocialProvider = ({ children }) => {
   useEffect(() => {
     if (activeChat) {
       const messagesRef = ref(database, `messages/${activeChat}`);
-      const messagesUnsubscribe = onValue(messagesRef, (snapshot) => {
-        if (snapshot.exists()) {
-          const messagesData = Object.values(snapshot.val()).sort(
-            (a, b) => new Date(a.timestamp) - new Date(b.timestamp)
-          );
-          setMessages(messagesData);
-        } else {
+      const messagesUnsubscribe = onValue(
+        messagesRef,
+        (snapshot) => {
+          if (snapshot.exists()) {
+            const messagesData = Object.values(snapshot.val()).sort(
+              (a, b) => new Date(a.timestamp) - new Date(b.timestamp)
+            );
+            setMessages(messagesData);
+          } else {
+            setMessages([]);
+          }
+        },
+        (error) => {
+          console.warn('Firebase messages listener error', error);
           setMessages([]);
         }
-      });
+      );
 
       return () => {
-        off(messagesRef, 'value', messagesUnsubscribe);
+        try { if (typeof messagesUnsubscribe === 'function') messagesUnsubscribe(); } catch (e) { console.warn('Error cleaning messages listener', e); }
       };
     } else {
       setMessages([]);

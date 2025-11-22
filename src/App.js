@@ -1,6 +1,6 @@
 // src/App.js
 import React from 'react';
-import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
+import { createBrowserRouter, RouterProvider, Navigate } from 'react-router-dom';
 import { Toaster } from 'react-hot-toast';
 import { HelmetProvider } from 'react-helmet-async';
 
@@ -33,110 +33,105 @@ import ChatList from './components/Chat/ChatList';
 import './index.css';
 
 function App() {
+  const router = createBrowserRouter([
+    {
+      path: '/login',
+      element: (
+        <PublicRoute>
+          <Login />
+        </PublicRoute>
+      ),
+    },
+    {
+      path: '/register',
+      element: (
+        <PublicRoute>
+          <Register />
+        </PublicRoute>
+      ),
+    },
+    {
+      path: '/forgot-password',
+      element: (
+        <PublicRoute>
+          <ForgotPassword />
+        </PublicRoute>
+      ),
+    },
+    {
+      path: '/onboarding',
+      element: (
+        <ProtectedRoute>
+          <Onboarding />
+        </ProtectedRoute>
+      ),
+    },
+    {
+      path: '/',
+      element: (
+        <ProtectedRoute>
+          <Layout />
+        </ProtectedRoute>
+      ),
+      children: [
+        { index: true, element: <Navigate to="/dashboard" replace /> },
+        { path: 'dashboard', element: <Dashboard /> },
+        { path: 'calendar', element: <Calendar /> },
+        { path: 'tracking', element: <Tracking /> },
+        { path: 'social', element: <Social /> },
+        { path: 'share-cycle', element: <ShareCycle /> },
+        { path: 'shared-notes', element: <SharedNotes /> },
+        { path: 'chat', element: <ChatList /> },
+        { path: 'profile', element: <Profile /> },
+        { path: 'settings', element: <Settings /> },
+      ],
+    },
+    { path: '*', element: <Navigate to="/dashboard" replace /> },
+  ]);
+
   return (
     <HelmetProvider>
-      <Router>
-        <AuthProvider>
-          <CycleProvider>
-            <SocialProvider>
-              <div className="App">
-                <Routes>
-                  {/* Rutas públicas */}
-                  <Route 
-                    path="/login" 
-                    element={
-                      <PublicRoute>
-                        <Login />
-                      </PublicRoute>
-                    } 
-                  />
-                  <Route 
-                    path="/register" 
-                    element={
-                      <PublicRoute>
-                        <Register />
-                      </PublicRoute>
-                    } 
-                  />
-                  <Route 
-                    path="/forgot-password" 
-                    element={
-                      <PublicRoute>
-                        <ForgotPassword />
-                      </PublicRoute>
-                    } 
-                  />
+      <AuthProvider>
+        <CycleProvider>
+          <SocialProvider>
+            <div className="App">
+              <RouterProvider router={router} future={{ v7_startTransition: true, v7_relativeSplatPath: true }} />
 
-                  {/* Rutas protegidas */}
-                  <Route 
-                    path="/onboarding" 
-                    element={
-                      <ProtectedRoute>
-                        <Onboarding />
-                      </ProtectedRoute>
-                    } 
-                  />
-                  
-                  <Route 
-                    path="/" 
-                    element={
-                      <ProtectedRoute>
-                        <Layout />
-                      </ProtectedRoute>
-                    }
-                  >
-                    <Route index element={<Navigate to="/dashboard" replace />} />
-                    <Route path="dashboard" element={<Dashboard />} />
-                    <Route path="calendar" element={<Calendar />} />
-                    <Route path="tracking" element={<Tracking />} />
-                    <Route path="social" element={<Social />} />
-                    <Route path="share-cycle" element={<ShareCycle />} />
-                    <Route path="shared-notes" element={<SharedNotes />} />
-                    <Route path="chat" element={<ChatList />} />
-                    <Route path="profile" element={<Profile />} />
-                    <Route path="settings" element={<Settings />} />
-                  </Route>
-
-                  {/* Ruta por defecto */}
-                  <Route path="*" element={<Navigate to="/dashboard" replace />} />
-                </Routes>
-
-                {/* Notificaciones Toast */}
-                <Toaster
-                  position="top-right"
-                  toastOptions={{
-                    duration: 4000,
+              {/* Notificaciones Toast */}
+              <Toaster
+                position="top-right"
+                toastOptions={{
+                  duration: 4000,
+                  style: {
+                    background: '#363636',
+                    color: '#fff',
+                    borderRadius: '10px',
+                    fontSize: '14px',
+                  },
+                  success: {
                     style: {
-                      background: '#363636',
-                      color: '#fff',
-                      borderRadius: '10px',
-                      fontSize: '14px',
+                      background: '#10b981',
                     },
-                    success: {
-                      style: {
-                        background: '#10b981',
-                      },
-                      iconTheme: {
-                        primary: '#fff',
-                        secondary: '#10b981',
-                      },
+                    iconTheme: {
+                      primary: '#fff',
+                      secondary: '#10b981',
                     },
-                    error: {
-                      style: {
-                        background: '#ef4444',
-                      },
-                      iconTheme: {
-                        primary: '#fff',
-                        secondary: '#ef4444',
-                      },
+                  },
+                  error: {
+                    style: {
+                      background: '#ef4444',
                     },
-                  }}
-                />
-              </div>
-            </SocialProvider>
-          </CycleProvider>
-        </AuthProvider>
-      </Router>
+                    iconTheme: {
+                      primary: '#fff',
+                      secondary: '#ef4444',
+                    },
+                  },
+                }}
+              />
+            </div>
+          </SocialProvider>
+        </CycleProvider>
+      </AuthProvider>
     </HelmetProvider>
   );
 }

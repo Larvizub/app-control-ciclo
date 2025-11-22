@@ -1,6 +1,6 @@
 // src/contexts/CycleContext.js
 import React, { createContext, useContext, useState, useEffect, useCallback, useMemo, useRef } from 'react';
-import { ref, set, get, push, onValue, off } from 'firebase/database';
+import { ref, set, get, push, onValue } from 'firebase/database';
 import { database } from '../config/firebase';
 import { useAuth } from './AuthContext';
 import { 
@@ -26,6 +26,7 @@ export const useCycle = () => {
 
 export const CycleProvider = ({ children }) => {
   const { currentUser } = useAuth();
+  const dbAccessDeniedRef = useRef(false);
   const [cycleData, setCycleData] = useState(null);
   const [periods, setPeriods] = useState([]);
   const [symptoms, setSymptoms] = useState([]);
@@ -46,6 +47,10 @@ export const CycleProvider = ({ children }) => {
   // Inicializar datos del ciclo
   const initializeCycleData = useCallback(async () => {
     if (!currentUser) return;
+    if (dbAccessDeniedRef.current) {
+      console.warn('Omitiendo initializeCycleData por permisos de DB denegados');
+      return;
+    }
 
     try {
       const cycleRef = ref(database, `cycles/${currentUser.uid}`);
@@ -353,49 +358,114 @@ export const CycleProvider = ({ children }) => {
   // Cargar datos
   useEffect(() => {
     if (currentUser) {
+      if (dbAccessDeniedRef.current) {
+        console.warn('Acceso a Realtime Database denegado — listeners omitidos (CycleContext)');
+        setLoading(false);
+        return;
+      }
       initializeCycleData();
       
       // Cargar períodos
       const periodsRef = ref(database, `periods/${currentUser.uid}`);
-      const periodsUnsubscribe = onValue(periodsRef, (snapshot) => {
-        if (snapshot.exists()) {
-          const periodsData = Object.entries(snapshot.val()).map(([id, data]) => ({
-            id,
-            ...data
-          }));
-          setPeriods(periodsData);
-        } else {
+      let periodsUnsubscribe;
+      periodsUnsubscribe = onValue(
+        periodsRef,
+        (snapshot) => {
+          if (snapshot.exists()) {
+            const periodsData = Object.entries(snapshot.val()).map(([id, data]) => ({
+              id,
+              ...data
+            }));
+            setPeriods(periodsData);
+          } else {
+            setPeriods([]);
+          }
+        },
+        (error) => {
+          console.warn('Firebase periods listener error', error);
           setPeriods([]);
+          if (error && /permission_denied/i.test(error.message || error.code || '')) {
+            dbAccessDeniedRef.current = true;
+            toast.error('Acceso a la base de datos denegado. Revisa las reglas de Firebase.');
+            try { if (typeof periodsUnsubscribe === 'function') periodsUnsubscribe(); } catch (e) {}
+            try { if (typeof symptomsUnsubscribe === 'function') symptomsUnsubscribe(); } catch (e) {}
+            try { if (typeof predictionsUnsubscribe === 'function') predictionsUnsubscribe(); } catch (e) {}
+          }
         }
-      });
+      );
 
       // Cargar síntomas
       const symptomsRef = ref(database, `symptoms/${currentUser.uid}`);
-      const symptomsUnsubscribe = onValue(symptomsRef, (snapshot) => {
-        if (snapshot.exists()) {
-          const symptomsData = Object.entries(snapshot.val()).map(([id, data]) => ({
-            id,
-            ...data
-          }));
-          setSymptoms(symptomsData);
-        } else {
+      let symptomsUnsubscribe;
+      symptomsUnsubscribe = onValue(
+        symptomsRef,
+        (snapshot) => {
+          if (snapshot.exists()) {
+            const symptomsData = Object.entries(snapshot.val()).map(([id, data]) => ({
+              id,
+              ...data
+            }));
+            setSymptoms(symptomsData);
+          } else {
+            setSymptoms([]);
+          }
+        },
+        (error) => {
+          console.warn('Firebase symptoms listener error', error);
           setSymptoms([]);
+          if (error && /permission_denied/i.test(error.message || error.code || '')) {
+            dbAccessDeniedRef.current = true;
+            toast.error('Acceso a la base de datos denegado. Revisa las reglas de Firebase.');
+            try { if (typeof periodsUnsubscribe === 'function') periodsUnsubscribe(); } catch (e) {}
+            try { if (typeof symptomsUnsubscribe === 'function') symptomsUnsubscribe(); } catch (e) {}
+            try { if (typeof predictionsUnsubscribe === 'function') predictionsUnsubscribe(); } catch (e) {}
+          }
         }
-      });
+      );
 
       // Cargar predicciones
       const predictionsRef = ref(database, `predictions/${currentUser.uid}`);
-      const predictionsUnsubscribe = onValue(predictionsRef, (snapshot) => {
-        if (snapshot.exists()) {
-          setPredictions(snapshot.val());
+      let predictionsUnsubscribe;
+      predictionsUnsubscribe = onValue(
+        predictionsRef,
+        (snapshot) => {
+          if (snapshot.exists()) {
+            setPredictions(snapshot.val());
+          }
+          setLoading(false);
+        },
+        (error) => {
+          console.warn('Firebase predictions listener error', error);
+          setPredictions(null);
+          setLoading(false);
+          if (error && /permission_denied/i.test(error.message || error.code || '')) {
+            dbAccessDeniedRef.current = true;
+            toast.error('Acceso a la base de datos denegado. Revisa las reglas de Firebase.');
+            try { if (typeof periodsUnsubscribe === 'function') periodsUnsubscribe(); } catch (e) {}
+            try { if (typeof symptomsUnsubscribe === 'function') symptomsUnsubscribe(); } catch (e) {}
+            try { if (typeof predictionsUnsubscribe === 'function') predictionsUnsubscribe(); } catch (e) {}
+          }
         }
-        setLoading(false);
-      });
+      );
 
       return () => {
-        off(periodsRef, 'value', periodsUnsubscribe);
-        off(symptomsRef, 'value', symptomsUnsubscribe);
-        off(predictionsRef, 'value', predictionsUnsubscribe);
+        try {
+          if (typeof periodsUnsubscribe === 'function') periodsUnsubscribe();
+        } catch (e) {
+          console.warn('Error al limpiar periods listener', e);
+        }
+
+        try {
+          if (typeof symptomsUnsubscribe === 'function') symptomsUnsubscribe();
+        } catch (e) {
+          console.warn('Error al limpiar symptoms listener', e);
+        }
+
+        try {
+          if (typeof predictionsUnsubscribe === 'function') predictionsUnsubscribe();
+        } catch (e) {
+          console.warn('Error al limpiar predictions listener', e);
+        }
       };
     } else {
       setLoading(false);
