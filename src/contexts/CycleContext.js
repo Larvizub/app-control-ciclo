@@ -550,7 +550,10 @@ export const CycleProvider = ({ children }) => {
       return raw
         ? JSON.parse(raw)
         : {
+            // backward compatible single partnerId
             partnerId: null,
+            // array of authorized partners: { email, permissions, addedAt }
+            authorized: [],
             permissions: {
               periods: true,
               symptoms: true,
@@ -563,6 +566,7 @@ export const CycleProvider = ({ children }) => {
     } catch (e) {
       return {
         partnerId: null,
+        authorized: [],
         permissions: {
           periods: true,
           symptoms: true,
@@ -583,18 +587,126 @@ export const CycleProvider = ({ children }) => {
     }
   }, [shareSettings]);
 
+  // Persistir en Firebase (async) con fallback a localStorage si hay permisos denegados
+  const persistShareSettingsToDb = useCallback(async (data) => {
+    if (!currentUser) return;
+    if (dbAccessDeniedRef.current) return;
+    try {
+      const shareRef = ref(database, `cycles/${currentUser.uid}/shareSettings`);
+      await set(shareRef, data);
+    } catch (err) {
+      console.warn('Error guardando shareSettings en DB', err);
+      if (err && /permission_denied/i.test(err.message || err.code || '')) {
+        dbAccessDeniedRef.current = true;
+        toast.error('No se pudo guardar configuraciones de compartido en la base de datos. Se usará almacenamiento local.');
+      }
+    }
+  }, [currentUser]);
+
   const updateShareSettings = useCallback((patch) => {
     setShareSettings((prev) => {
       const merged = {
         ...prev,
         ...patch,
+        // merge permissions safely
         permissions: { ...(prev.permissions || {}), ...(patch.permissions || {}) },
+        // keep authorized array if provided, otherwise keep prev
+        authorized: patch.authorized ? patch.authorized : prev.authorized,
+        // maintain partnerId for backward compatibility
+        partnerId: patch.partnerId !== undefined ? patch.partnerId : prev.partnerId,
         lastUpdated: new Date().toISOString()
       };
       try { localStorage.setItem(LOCAL_KEY_SHARE, JSON.stringify(merged)); } catch {}
+      // intentar persistir en DB (no bloquear UI)
+      persistShareSettingsToDb(merged);
       return merged;
     });
-  }, []);
+  }, [persistShareSettingsToDb]);
+
+  // Añadir un correo autorizado (o actualizar permisos si ya existe)
+  const addAuthorized = useCallback((email, permissions = null) => {
+    if (!email) return;
+    setShareSettings((prev) => {
+      const existing = Array.isArray(prev.authorized) ? [...prev.authorized] : [];
+      const idx = existing.findIndex(a => a.email === email);
+      const now = new Date().toISOString();
+      if (idx >= 0) {
+        existing[idx] = {
+          ...existing[idx],
+          permissions: permissions ? permissions : existing[idx].permissions,
+          updatedAt: now
+        };
+      } else {
+        existing.push({ email, permissions: permissions || prev.permissions || {}, addedAt: now });
+      }
+
+      const merged = {
+        ...prev,
+        authorized: existing,
+        partnerId: existing.length ? existing[0].email : null,
+        lastUpdated: now
+      };
+      try { localStorage.setItem(LOCAL_KEY_SHARE, JSON.stringify(merged)); } catch {}
+      // persistir en DB
+      persistShareSettingsToDb(merged);
+      return merged;
+    });
+  }, [persistShareSettingsToDb]);
+
+  const removeAuthorized = useCallback((email) => {
+    if (!email) return;
+    setShareSettings((prev) => {
+      const existing = Array.isArray(prev.authorized) ? prev.authorized.filter(a => a.email !== email) : [];
+      const merged = {
+        ...prev,
+        authorized: existing,
+        partnerId: existing.length ? existing[0].email : null,
+        lastUpdated: new Date().toISOString()
+      };
+      try { localStorage.setItem(LOCAL_KEY_SHARE, JSON.stringify(merged)); } catch {}
+      // persistir en DB
+      persistShareSettingsToDb(merged);
+      return merged;
+    });
+  }, [persistShareSettingsToDb]);
+
+  // Escuchar cambios en la DB para shareSettings y sincronizar localmente
+  useEffect(() => {
+    if (!currentUser) return;
+    if (dbAccessDeniedRef.current) return;
+
+    let shareUnsubscribe;
+    try {
+      const shareRef = ref(database, `cycles/${currentUser.uid}/shareSettings`);
+      shareUnsubscribe = onValue(
+        shareRef,
+        (snapshot) => {
+          if (snapshot.exists()) {
+            const data = snapshot.val();
+            setShareSettings((prev) => {
+              const merged = { ...prev, ...data };
+              try { localStorage.setItem(LOCAL_KEY_SHARE, JSON.stringify(merged)); } catch {}
+              return merged;
+            });
+          }
+        },
+        (error) => {
+          console.warn('Firebase shareSettings listener error', error);
+          if (error && /permission_denied/i.test(error.message || error.code || '')) {
+            dbAccessDeniedRef.current = true;
+            toast.error('Acceso a configuraciones de compartido denegado. Usando almacenamiento local.');
+            try { if (typeof shareUnsubscribe === 'function') shareUnsubscribe(); } catch (e) {}
+          }
+        }
+      );
+    } catch (e) {
+      console.warn('No se pudo crear listener de shareSettings', e);
+    }
+
+    return () => {
+      try { if (typeof shareUnsubscribe === 'function') shareUnsubscribe(); } catch (e) {}
+    };
+  }, [currentUser]);
 
   const getShareSettings = useCallback(() => shareSettings, [shareSettings]);
 
@@ -641,6 +753,8 @@ export const CycleProvider = ({ children }) => {
     updateShareSettings,
     getShareSettings,
     getSharedData,
+    addAuthorized,
+    removeAuthorized,
   }), [
     cycleData,
     periods,
@@ -662,6 +776,8 @@ export const CycleProvider = ({ children }) => {
     updateShareSettings,
     getShareSettings,
     getSharedData,
+    addAuthorized,
+    removeAuthorized,
   ]);
 
   // Efecto de limpieza para el gestor de actualizaciones

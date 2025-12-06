@@ -28,8 +28,7 @@ const ShareCycle = () => {
   const [activeTab, setActiveTab] = useState('overview');
   const [sharedWith, setSharedWith] = useState([]);
   const [partnerEmail, setPartnerEmail] = useState('');
-  const [isInviting, setIsInviting] = useState(false);
-  const [shareSettings, setShareSettings] = useState({
+  const [localShareSettings, setLocalShareSettings] = useState({
     periods: true,
     symptoms: true,
     mood: true,
@@ -38,21 +37,21 @@ const ShareCycle = () => {
   });
 
   const { friends, shareCycleWith, sharedUsers } = useSocial();
-  const { currentPhase, nextPeriodDate } = useCycle();
-  const { userProfile, isMaleUser, shareWithPartner, stopSharingWithPartner } = useAuth();
+  const { currentPhase, nextPeriodDate, shareSettings: contextShareSettings, updateShareSettings, addAuthorized, removeAuthorized } = useCycle();
+  const { userProfile, isMaleUser, stopSharingWithPartner } = useAuth();
 
   // Cargar datos compartidos desde sharedUsers
   useEffect(() => {
     if (sharedUsers && sharedUsers.length > 0) {
-      setSharedWith(sharedUsers.map(u => ({ friendId: u.id, settings: shareSettings })));
+      setSharedWith(sharedUsers.map(u => ({ friendId: u.id, settings: localShareSettings })));
     }
-  }, [sharedUsers, shareSettings]);
+  }, [sharedUsers, localShareSettings]);
 
   const handleShareToggle = async (friendId, isSharing) => {
     try {
-      if (isSharing) {
+        if (isSharing) {
         await shareCycleWith(friendId);
-        setSharedWith(prev => [...prev, { friendId, settings: shareSettings }]);
+        setSharedWith(prev => [...prev, { friendId, settings: localShareSettings }]);
       } else {
         // Remover compartir - por ahora solo actualizamos el estado local
         setSharedWith(prev => prev.filter(s => s.friendId !== friendId));
@@ -141,45 +140,39 @@ const ShareCycle = () => {
         </div>
       </div>
 
-      {/* Personas con acceso */}
+      {/* Personas con acceso (autorizados) */}
       <div className="bg-white rounded-xl border border-gray-200 p-6">
         <div className="flex items-center justify-between mb-4">
-          <h3 className="text-lg font-semibold text-gray-900">
-            Compartido con
-          </h3>
+          <h3 className="text-lg font-semibold text-gray-900">Compartido con</h3>
           <span className="bg-gray-100 text-gray-600 px-3 py-1 rounded-full text-sm">
-            {sharedWith.length} personas
+            {Array.isArray(contextShareSettings?.authorized) ? contextShareSettings.authorized.length : 0} personas
           </span>
         </div>
-        
-        {sharedWith.length > 0 ? (
+
+        {Array.isArray(contextShareSettings?.authorized) && contextShareSettings.authorized.length > 0 ? (
           <div className="space-y-3">
-            {sharedWith.map((share) => {
-              const friend = friends.find(f => f.id === share.friendId);
-              if (!friend) return null;
-              
-              return (
-                <div key={share.friendId} className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
-                  <div className="flex items-center space-x-3">
-                    <div className="w-10 h-10 bg-gradient-to-br from-pink-400 to-purple-500 rounded-full flex items-center justify-center">
-                      <span className="text-white font-semibold">
-                        {friend.name.charAt(0)}
-                      </span>
-                    </div>
-                    <div>
-                      <p className="font-medium text-gray-900">{friend.name}</p>
-                      <p className="text-sm text-gray-600">
-                        {Object.keys(share.settings).filter(key => share.settings[key]).length} categorías
-                      </p>
-                    </div>
+            {contextShareSettings.authorized.map((a) => (
+              <div key={a.email} className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
+                <div className="flex items-center space-x-3">
+                  <div className="w-10 h-10 bg-gradient-to-br from-pink-400 to-purple-500 rounded-full flex items-center justify-center">
+                    <span className="text-white font-semibold">{a.email.charAt(0).toUpperCase()}</span>
                   </div>
-                  <div className="flex items-center space-x-2">
-                    <Eye className="w-4 h-4 text-green-500" />
-                    <span className="text-sm text-green-600">Activo</span>
+                  <div>
+                    <p className="font-medium text-gray-900">{a.email}</p>
+                    <p className="text-sm text-gray-600">{a.permissions ? Object.keys(a.permissions).filter(k => a.permissions[k]).length : 0} categorías</p>
                   </div>
                 </div>
-              );
-            })}
+                <div className="flex items-center space-x-2">
+                  <Eye className="w-4 h-4 text-green-500" />
+                  <button
+                    onClick={() => removeAuthorized && removeAuthorized(a.email)}
+                    className="text-sm text-red-600 underline"
+                  >
+                    Quitar
+                  </button>
+                </div>
+              </div>
+            ))}
           </div>
         ) : (
           <div className="text-center py-8 text-gray-500">
@@ -196,7 +189,7 @@ const ShareCycle = () => {
           ¿Qué compartir por defecto?
         </h3>
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          {shareCategories.map((category) => {
+                {shareCategories.map((category) => {
             const Icon = category.icon;
             return (
               <div key={category.id} className="flex items-center justify-between p-4 border border-gray-200 rounded-lg">
@@ -208,17 +201,17 @@ const ShareCycle = () => {
                   </div>
                 </div>
                 <button
-                  onClick={() => setShareSettings(prev => ({
+                  onClick={() => setLocalShareSettings(prev => ({
                     ...prev,
                     [category.id]: !prev[category.id]
                   }))}
                   className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${
-                    shareSettings[category.id] ? 'bg-pink-500' : 'bg-gray-300'
+                    localShareSettings[category.id] ? 'bg-pink-500' : 'bg-gray-300'
                   }`}
                 >
                   <span
                     className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
-                      shareSettings[category.id] ? 'translate-x-6' : 'translate-x-1'
+                      localShareSettings[category.id] ? 'translate-x-6' : 'translate-x-1'
                     }`}
                   />
                 </button>
@@ -319,29 +312,7 @@ const ShareCycle = () => {
   const renderPartner = () => {
     const hasPartner = userProfile?.partnerId;
     
-    const handleInvitePartner = async () => {
-      if (!partnerEmail.trim()) {
-        toast.error('Por favor ingresa un correo electrónico');
-        return;
-      }
-      
-      if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(partnerEmail)) {
-        toast.error('Por favor ingresa un correo válido');
-        return;
-      }
-      
-      setIsInviting(true);
-      try {
-        await shareWithPartner(partnerEmail);
-        toast.success('¡Invitación enviada correctamente!');
-        setPartnerEmail('');
-      } catch (error) {
-        console.error('Error invitando pareja:', error);
-        toast.error('Error al enviar la invitación');
-      } finally {
-        setIsInviting(false);
-      }
-    };
+    // La función de invitación por correo fue retirada; utilizar la opción "Autorizar".
     
     const handleUnlinkPartner = async () => {
       if (window.confirm('¿Estás seguro de que deseas desvincular a tu pareja? Ella ya no podrá ver tu ciclo.')) {
@@ -497,11 +468,12 @@ const ShareCycle = () => {
               <div className="bg-white rounded-xl border border-gray-200 p-6">
                 <h4 className="font-semibold text-gray-900 mb-4 flex items-center gap-2">
                   <Mail className="w-5 h-5 text-pink-500" />
-                  Invitar a tu pareja
+                  Autorizar a tu pareja
                 </h4>
                 <p className="text-sm text-gray-600 mb-4">
-                  Ingresa el correo electrónico con el que tu pareja se registró o se registrará en la app.
+                  Ingresa el correo que estará autorizado para ver la información que selecciones. No se enviará ningún correo ni notificación automática.
                 </p>
+
                 <div className="space-y-4">
                   <input
                     type="email"
@@ -509,25 +481,54 @@ const ShareCycle = () => {
                     onChange={(e) => setPartnerEmail(e.target.value)}
                     placeholder="correo@pareja.com"
                     className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-pink-500 focus:border-pink-500"
-                    disabled={isInviting}
                   />
-                  <button 
-                    onClick={handleInvitePartner}
-                    disabled={isInviting}
-                    className="w-full flex items-center justify-center gap-2 bg-gradient-to-r from-red-500 to-pink-600 text-white py-3 px-4 rounded-lg font-semibold hover:from-red-600 hover:to-pink-700 transition-all duration-200 disabled:opacity-50"
-                  >
-                    {isInviting ? (
-                      <>
-                        <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
-                        <span>Enviando...</span>
-                      </>
-                    ) : (
-                      <>
-                        <Heart className="w-5 h-5" />
-                        <span>Enviar invitación</span>
-                      </>
-                    )}
-                  </button>
+
+                  <div className="flex gap-2">
+                    <button
+                      onClick={() => {
+                        // validar básico
+                        const email = (partnerEmail || '').trim();
+                        if (!email) { toast.error('Por favor ingresa un correo'); return; }
+                        if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) { toast.error('Correo inválido'); return; }
+                        // Guardar como autorizado en shareSettings (sin enviar correo)
+                            if (typeof addAuthorized === 'function') {
+                              addAuthorized(email, contextShareSettings?.permissions || { periods: true, symptoms: true, mood: true, predictions: true, notes: false });
+                              toast.success('Correo autorizado');
+                              setPartnerEmail('');
+                            } else if (typeof updateShareSettings === 'function') {
+                              // fallback por compatibilidad
+                              updateShareSettings({ partnerId: email, permissions: contextShareSettings?.permissions || { periods: true, symptoms: true, mood: true, predictions: true, notes: false } });
+                              toast.success('Correo autorizado (compatibilidad)');
+                              setPartnerEmail('');
+                            } else {
+                              toast.error('Función de autorización no disponible');
+                            }
+                      }}
+                      className="w-full flex items-center justify-center gap-2 bg-gradient-to-r from-red-500 to-pink-600 text-white py-3 px-4 rounded-lg font-semibold hover:from-red-600 hover:to-pink-700 transition-all duration-200"
+                    >
+                      <Heart className="w-5 h-5" />
+                      <span>Autorizar</span>
+                    </button>
+
+                    <button
+                      onClick={() => {
+                          // eliminar autorización local: preferir removeAuthorized sobre parchear partnerId
+                          const emailToRemove = contextShareSettings?.partnerId || null;
+                          if (emailToRemove && typeof removeAuthorized === 'function') {
+                            removeAuthorized(emailToRemove);
+                            toast.success('Autorización eliminada');
+                          } else if (typeof updateShareSettings === 'function') {
+                            updateShareSettings({ partnerId: null });
+                            toast.success('Autorización eliminada (compatibilidad)');
+                          } else {
+                            toast.error('Función de eliminación no disponible');
+                          }
+                        }}
+                      className="w-40 flex items-center justify-center gap-2 border border-gray-300 py-3 px-4 rounded-lg text-sm"
+                    >
+                      Eliminar autorización
+                    </button>
+                  </div>
                 </div>
               </div>
             </>
