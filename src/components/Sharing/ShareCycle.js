@@ -1,5 +1,5 @@
 // src/components/Sharing/ShareCycle.js
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect } from 'react';
 import { 
   Share2, 
   Users, 
@@ -37,30 +37,24 @@ const ShareCycle = () => {
     notes: false
   });
 
-  const { friends, shareDataWith, getSharedData, updateShareSettings } = useSocial();
+  const { friends, shareCycleWith, sharedUsers } = useSocial();
   const { currentPhase, nextPeriodDate } = useCycle();
   const { userProfile, isMaleUser, shareWithPartner, stopSharingWithPartner } = useAuth();
 
-  const loadSharedData = useCallback(async () => {
-    try {
-      const shared = await getSharedData();
-      setSharedWith(shared);
-    } catch (error) {
-      console.error('Error loading shared data:', error);
-    }
-  }, [getSharedData]);
-
+  // Cargar datos compartidos desde sharedUsers
   useEffect(() => {
-    loadSharedData();
-  }, [loadSharedData]);
+    if (sharedUsers && sharedUsers.length > 0) {
+      setSharedWith(sharedUsers.map(u => ({ friendId: u.id, settings: shareSettings })));
+    }
+  }, [sharedUsers, shareSettings]);
 
   const handleShareToggle = async (friendId, isSharing) => {
     try {
       if (isSharing) {
-        await shareDataWith(friendId, shareSettings);
+        await shareCycleWith(friendId);
         setSharedWith(prev => [...prev, { friendId, settings: shareSettings }]);
       } else {
-        // Remover compartir
+        // Remover compartir - por ahora solo actualizamos el estado local
         setSharedWith(prev => prev.filter(s => s.friendId !== friendId));
       }
     } catch (error) {
@@ -69,14 +63,10 @@ const ShareCycle = () => {
   };
 
   const handleUpdateShareSettings = async (friendId, newSettings) => {
-    try {
-      await updateShareSettings(friendId, newSettings);
-      setSharedWith(prev => prev.map(s => 
-        s.friendId === friendId ? { ...s, settings: newSettings } : s
-      ));
-    } catch (error) {
-      console.error('Error updating share settings:', error);
-    }
+    // Actualizar configuración localmente
+    setSharedWith(prev => prev.map(s => 
+      s.friendId === friendId ? { ...s, settings: newSettings } : s
+    ));
   };
 
   const shareCategories = [
