@@ -1,5 +1,5 @@
 // src/contexts/AuthContext.js
-import React, { createContext, useContext, useState, useEffect } from 'react';
+import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
 import {
   signInWithEmailAndPassword,
   createUserWithEmailAndPassword,
@@ -10,7 +10,7 @@ import {
   GoogleAuthProvider,
   signInWithPopup
 } from 'firebase/auth';
-import { ref, set, get } from 'firebase/database';
+import { ref, set, get, query, orderByChild, equalTo, update } from 'firebase/database';
 import { auth, database } from '../config/firebase';
 import toast from 'react-hot-toast';
 
@@ -28,6 +28,16 @@ export const AuthProvider = ({ children }) => {
   const [currentUser, setCurrentUser] = useState(null);
   const [loading, setLoading] = useState(true);
   const [userProfile, setUserProfile] = useState(null);
+  const [partnerProfile, setPartnerProfile] = useState(null); // Perfil de la pareja (para hombres)
+
+  // Verificar si el usuario necesita seleccionar tipo de perfil
+  const needsProfileTypeSelection = userProfile && !userProfile.userType;
+  
+  // Verificar si es usuario masculino
+  const isMaleUser = userProfile?.userType === 'male';
+  
+  // Verificar si es usuario femenino
+  const isFemaleUser = userProfile?.userType === 'female';
 
   // Crear cuenta
   const signup = async (email, password, userData) => {
@@ -197,6 +207,162 @@ export const AuthProvider = ({ children }) => {
     }
   };
 
+  // Establecer tipo de usuario (male/female)
+  const setUserType = async (userType) => {
+    try {
+      if (!currentUser) throw new Error('No hay usuario autenticado');
+      
+      const userRef = ref(database, `users/${currentUser.uid}`);
+      await update(userRef, {
+        userType,
+        updatedAt: new Date().toISOString()
+      });
+      
+      setUserProfile(prev => ({
+        ...prev,
+        userType,
+        updatedAt: new Date().toISOString()
+      }));
+      
+      toast.success(userType === 'female' ? '¡Perfil femenino configurado!' : '¡Perfil masculino configurado!');
+    } catch (error) {
+      console.error('Error estableciendo tipo de usuario:', error);
+      toast.error('Error al configurar el perfil');
+      throw error;
+    }
+  };
+
+  // Compartir ciclo con pareja (solo mujeres)
+  const shareWithPartner = async (partnerEmail) => {
+    try {
+      if (!currentUser) throw new Error('No hay usuario autenticado');
+      if (!isFemaleUser) throw new Error('Solo usuarios femeninos pueden compartir su ciclo');
+      
+      // Buscar usuario por email
+      const usersRef = ref(database, 'users');
+      const usersQuery = query(usersRef, orderByChild('email'), equalTo(partnerEmail));
+      const snapshot = await get(usersQuery);
+      
+      if (!snapshot.exists()) {
+        toast.error('Usuario no encontrado. Asegúrate de que tu pareja tenga cuenta.');
+        return null;
+      }
+      
+      const partnerData = Object.values(snapshot.val())[0];
+      const partnerId = partnerData.uid;
+      
+      if (partnerId === currentUser.uid) {
+        toast.error('No puedes compartir contigo mismo');
+        return null;
+      }
+      
+      if (partnerData.userType !== 'male') {
+        toast.error('Solo puedes compartir con usuarios masculinos');
+        return null;
+      }
+      
+      // Crear relación de pareja
+      const partnershipData = {
+        odwifeId: currentUser.uid,
+        odwifeName: userProfile.name || userProfile.email,
+        odwifeEmail: currentUser.email,
+        partnerId: partnerId,
+        partnerName: partnerData.name || partnerData.email,
+        partnerEmail: partnerData.email,
+        sharedAt: new Date().toISOString(),
+        status: 'active',
+        permissions: ['view_cycle', 'view_calendar', 'view_symptoms', 'send_messages']
+      };
+      
+      // Guardar en ambos usuarios
+      await set(ref(database, `partnerships/${currentUser.uid}`), partnershipData);
+      await set(ref(database, `partnerships/${partnerId}`), partnershipData);
+      
+      // Actualizar perfil de la mujer
+      await update(ref(database, `users/${currentUser.uid}`), {
+        partnerId: partnerId,
+        partnerEmail: partnerData.email,
+        'privacy/shareWithPartner': true
+      });
+      
+      // Actualizar perfil del hombre
+      await update(ref(database, `users/${partnerId}`), {
+        partnerId: currentUser.uid,
+        partnerEmail: currentUser.email
+      });
+      
+      setUserProfile(prev => ({
+        ...prev,
+        partnerId: partnerId,
+        partnerEmail: partnerData.email,
+        privacy: { ...prev?.privacy, shareWithPartner: true }
+      }));
+      
+      toast.success(`¡Ciclo compartido con ${partnerData.name || partnerData.email}!`);
+      return partnerData;
+    } catch (error) {
+      console.error('Error compartiendo con pareja:', error);
+      toast.error('Error al compartir con tu pareja');
+      throw error;
+    }
+  };
+
+  // Dejar de compartir con pareja
+  const stopSharingWithPartner = async () => {
+    try {
+      if (!currentUser || !userProfile?.partnerId) return;
+      
+      const partnerId = userProfile.partnerId;
+      
+      // Eliminar relación
+      await set(ref(database, `partnerships/${currentUser.uid}`), null);
+      await set(ref(database, `partnerships/${partnerId}`), null);
+      
+      // Actualizar perfiles
+      await update(ref(database, `users/${currentUser.uid}`), {
+        partnerId: null,
+        partnerEmail: null,
+        'privacy/shareWithPartner': false
+      });
+      
+      await update(ref(database, `users/${partnerId}`), {
+        partnerId: null,
+        partnerEmail: null
+      });
+      
+      setUserProfile(prev => ({
+        ...prev,
+        partnerId: null,
+        partnerEmail: null,
+        privacy: { ...prev?.privacy, shareWithPartner: false }
+      }));
+      
+      setPartnerProfile(null);
+      
+      toast.success('Se dejó de compartir el ciclo');
+    } catch (error) {
+      console.error('Error dejando de compartir:', error);
+      toast.error('Error al dejar de compartir');
+      throw error;
+    }
+  };
+
+  // Cargar perfil de la pareja (para usuarios masculinos)
+  const loadPartnerProfile = useCallback(async (partnerId) => {
+    try {
+      const partnerRef = ref(database, `users/${partnerId}`);
+      const snapshot = await get(partnerRef);
+      if (snapshot.exists()) {
+        setPartnerProfile(snapshot.val());
+        return snapshot.val();
+      }
+      return null;
+    } catch (error) {
+      console.error('Error cargando perfil de pareja:', error);
+      return null;
+    }
+  }, []);
+
   // Obtener mensaje de error en español
   const getErrorMessage = (errorCode) => {
     const messages = {
@@ -219,6 +385,7 @@ export const AuthProvider = ({ children }) => {
         await loadUserProfile(user.uid);
       } else {
         setUserProfile(null);
+        setPartnerProfile(null);
       }
       setLoading(false);
     });
@@ -226,9 +393,17 @@ export const AuthProvider = ({ children }) => {
     return unsubscribe;
   }, []);
 
+  // Cargar perfil de pareja cuando el usuario masculino tiene partnerId
+  useEffect(() => {
+    if (isMaleUser && userProfile?.partnerId) {
+      loadPartnerProfile(userProfile.partnerId);
+    }
+  }, [isMaleUser, userProfile?.partnerId, loadPartnerProfile]);
+
   const value = {
     currentUser,
     userProfile,
+    partnerProfile,
     signup,
     login,
     loginWithGoogle,
@@ -236,7 +411,14 @@ export const AuthProvider = ({ children }) => {
     resetPassword,
     loading,
     loadUserProfile,
-    updateUserProfile
+    updateUserProfile,
+    setUserType,
+    shareWithPartner,
+    stopSharingWithPartner,
+    loadPartnerProfile,
+    needsProfileTypeSelection,
+    isMaleUser,
+    isFemaleUser
   };
 
   return (

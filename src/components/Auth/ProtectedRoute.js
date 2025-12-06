@@ -2,9 +2,10 @@
 import React from 'react';
 import { Navigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../../contexts/AuthContext';
+import ProfileTypeSelector from './ProfileTypeSelector';
 
-const ProtectedRoute = ({ children }) => {
-  const { currentUser, userProfile, loading } = useAuth();
+const ProtectedRoute = ({ children, skipProfileCheck = false }) => {
+  const { currentUser, userProfile, loading, needsProfileTypeSelection } = useAuth();
   const location = useLocation();
 
   if (loading) {
@@ -22,8 +23,15 @@ const ProtectedRoute = ({ children }) => {
     return <Navigate to="/login" />;
   }
 
+  // Si el usuario no ha seleccionado su tipo de perfil (hombre/mujer)
+  // Saltar esta verificación si estamos en la página de selección de perfil
+  if (needsProfileTypeSelection && !skipProfileCheck) {
+    return <ProfileTypeSelector />;
+  }
+
   // Si el usuario no ha completado el onboarding y no está en la página de onboarding
-  if (userProfile && !userProfile.onboardingCompleted && location.pathname !== '/onboarding') {
+  // Solo aplicar onboarding para usuarios femeninos
+  if (userProfile && userProfile.userType === 'female' && !userProfile.onboardingCompleted && location.pathname !== '/onboarding') {
     return <Navigate to="/onboarding" />;
   }
 

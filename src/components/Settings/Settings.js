@@ -1,10 +1,11 @@
 // src/components/Settings/Settings.js
 import React, { useState } from 'react';
-import { Settings as SettingsIcon, Bell, Shield, Palette, Smartphone } from 'lucide-react';
+import { Settings as SettingsIcon, Bell, Shield, Palette, Smartphone, Users, Heart } from 'lucide-react';
 import { useAuth } from '../../contexts/AuthContext';
 
 const Settings = () => {
-  const { logout } = useAuth();
+  const { logout, userProfile, isFemaleUser, isMaleUser, setUserType } = useAuth();
+  const [isChangingProfile, setIsChangingProfile] = useState(false);
   const [notifications, setNotifications] = useState({
     periodReminder: true,
     ovulationReminder: true,
@@ -63,6 +64,82 @@ const Settings = () => {
 
       <main className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         <div className="space-y-8">
+          {/* Tipo de Perfil */}
+          <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
+            <div className="flex items-center space-x-3 mb-6">
+              <Users className="w-6 h-6 text-pink-500" />
+              <h2 className="text-xl font-semibold text-gray-900">Tipo de Perfil</h2>
+            </div>
+            
+            <div className={`flex items-center gap-4 p-4 rounded-xl mb-4 ${isFemaleUser ? 'bg-gradient-to-r from-pink-50 to-purple-50 border border-pink-200' : 'bg-gradient-to-r from-blue-50 to-indigo-50 border border-blue-200'}`}>
+              <div className={`w-14 h-14 rounded-full flex items-center justify-center ${isFemaleUser ? 'bg-gradient-to-br from-pink-500 to-purple-600' : 'bg-gradient-to-br from-blue-500 to-indigo-600'}`}>
+                {isFemaleUser ? <Heart className="w-7 h-7 text-white" /> : <Users className="w-7 h-7 text-white" />}
+              </div>
+              <div className="flex-1">
+                <p className={`font-semibold text-lg ${isFemaleUser ? 'text-pink-900' : 'text-blue-900'}`}>
+                  {isFemaleUser ? 'Perfil Femenino' : 'Perfil Masculino'}
+                </p>
+                <p className={`text-sm ${isFemaleUser ? 'text-pink-700' : 'text-blue-700'}`}>
+                  {isFemaleUser ? 'Seguimiento de ciclo menstrual' : 'Acompañante de pareja'}
+                </p>
+              </div>
+            </div>
+
+            <button
+              onClick={() => setIsChangingProfile(true)}
+              className="w-full px-4 py-3 text-gray-700 bg-gray-100 hover:bg-gray-200 rounded-xl transition-colors font-medium"
+            >
+              Cambiar tipo de perfil
+            </button>
+
+            {/* Modal de cambio de perfil */}
+            {isChangingProfile && (
+              <div className="fixed inset-0 z-50 flex items-center justify-center p-4" style={{ backgroundColor: 'rgba(0,0,0,0.5)' }}>
+                <div className="bg-white rounded-3xl shadow-2xl w-full max-w-lg p-6">
+                  <h3 className="text-xl font-bold text-gray-900 mb-4">Cambiar tipo de perfil</h3>
+                  <p className="text-gray-600 mb-6">
+                    <strong>Advertencia:</strong> Cambiar tu tipo de perfil puede afectar tus datos y conexiones existentes.
+                  </p>
+                  
+                  <div className="grid grid-cols-2 gap-4 mb-6">
+                    <button
+                      onClick={async () => {
+                        await setUserType('female');
+                        setIsChangingProfile(false);
+                      }}
+                      disabled={isFemaleUser}
+                      className={`p-4 rounded-2xl border-2 transition-all text-center ${isFemaleUser ? 'border-pink-500 bg-pink-50 cursor-not-allowed' : 'border-gray-200 hover:border-pink-300 hover:bg-pink-50'}`}
+                    >
+                      <Heart className={`w-8 h-8 mx-auto mb-2 ${isFemaleUser ? 'text-pink-500' : 'text-gray-400'}`} />
+                      <p className="font-semibold text-gray-900">Femenino</p>
+                      {isFemaleUser && <p className="text-xs text-pink-600 mt-1">Actual</p>}
+                    </button>
+                    
+                    <button
+                      onClick={async () => {
+                        await setUserType('male');
+                        setIsChangingProfile(false);
+                      }}
+                      disabled={isMaleUser}
+                      className={`p-4 rounded-2xl border-2 transition-all text-center ${isMaleUser ? 'border-blue-500 bg-blue-50 cursor-not-allowed' : 'border-gray-200 hover:border-blue-300 hover:bg-blue-50'}`}
+                    >
+                      <Users className={`w-8 h-8 mx-auto mb-2 ${isMaleUser ? 'text-blue-500' : 'text-gray-400'}`} />
+                      <p className="font-semibold text-gray-900">Masculino</p>
+                      {isMaleUser && <p className="text-xs text-blue-600 mt-1">Actual</p>}
+                    </button>
+                  </div>
+                  
+                  <button
+                    onClick={() => setIsChangingProfile(false)}
+                    className="w-full px-4 py-3 text-gray-700 bg-gray-100 hover:bg-gray-200 rounded-xl transition-colors font-medium"
+                  >
+                    Cancelar
+                  </button>
+                </div>
+              </div>
+            )}
+          </div>
+
           {/* Notificaciones */}
           <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
             <div className="flex items-center space-x-3 mb-6">

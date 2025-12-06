@@ -7,6 +7,7 @@ import TodayCard from './TodayCard';
 import SymptomTracker from './SymptomTracker';
 import InsightsCard from './InsightsCard';
 import QuickActions from './QuickActions';
+import DashboardMale from './DashboardMale';
 import { format, startOfDay } from 'date-fns';
 import { es } from 'date-fns/locale';
 import { Sparkles, TrendingUp, Calendar } from 'lucide-react';
@@ -14,6 +15,18 @@ import SymptomModal from '../Modals/SymptomModal';
 import QuickNoteModal from '../Modals/QuickNoteModal';
 
 const Dashboard = () => {
+  const { currentUser, userProfile, isMaleUser } = useAuth();
+  
+  // Si es usuario masculino, mostrar dashboard masculino
+  if (isMaleUser) {
+    return <DashboardMale />;
+  }
+  
+  return <DashboardFemale />;
+};
+
+// Dashboard para usuarios femeninos (el original)
+const DashboardFemale = () => {
   const { currentUser, userProfile } = useAuth();
   const { 
     predictions, 

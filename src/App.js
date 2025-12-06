@@ -28,6 +28,7 @@ import Onboarding from './components/Onboarding/Onboarding';
 import ShareCycle from './components/Sharing/ShareCycle';
 import SharedNotes from './components/Sharing/SharedNotes';
 import ChatList from './components/Chat/ChatList';
+import ProfileTypeSelector from './components/Auth/ProfileTypeSelector';
 
 // Estilos
 import './index.css';
@@ -56,6 +57,14 @@ function App() {
         <PublicRoute>
           <ForgotPassword />
         </PublicRoute>
+      ),
+    },
+    {
+      path: '/select-profile',
+      element: (
+        <ProtectedRoute skipProfileCheck>
+          <ProfileTypeSelector />
+        </ProtectedRoute>
       ),
     },
     {
