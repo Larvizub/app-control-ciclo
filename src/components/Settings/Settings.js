@@ -4,7 +4,7 @@ import { Settings as SettingsIcon, Bell, Shield, Palette, Smartphone, Users, Hea
 import { useAuth } from '../../contexts/AuthContext';
 
 const Settings = () => {
-  const { logout, userProfile, isFemaleUser, isMaleUser, setUserType } = useAuth();
+  const { logout, isFemaleUser, isMaleUser, setUserType } = useAuth();
   const [isChangingProfile, setIsChangingProfile] = useState(false);
   const [notifications, setNotifications] = useState({
     periodReminder: true,

@@ -1,16 +1,15 @@
 // src/components/Dashboard/DashboardMale.js
 import React, { useState, useEffect, useCallback } from 'react';
 import { useAuth } from '../../contexts/AuthContext';
-import { ref, onValue, get } from 'firebase/database';
+import { ref, onValue } from 'firebase/database';
 import { database } from '../../config/firebase';
-import { format, parseISO, differenceInDays, addDays } from 'date-fns';
+import { format, parseISO, differenceInDays } from 'date-fns';
 import { es } from 'date-fns/locale';
 import { 
   Heart, 
   Calendar, 
   MessageSquare, 
   Sparkles, 
-  TrendingUp,
   AlertCircle,
   Gift,
   Coffee,

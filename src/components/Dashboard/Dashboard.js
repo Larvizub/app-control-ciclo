@@ -15,7 +15,7 @@ import SymptomModal from '../Modals/SymptomModal';
 import QuickNoteModal from '../Modals/QuickNoteModal';
 
 const Dashboard = () => {
-  const { currentUser, userProfile, isMaleUser } = useAuth();
+  const { isMaleUser } = useAuth();
   
   // Si es usuario masculino, mostrar dashboard masculino
   if (isMaleUser) {
