@@ -76,7 +76,7 @@ const PeriodModal = ({ isOpen, onClose }) => {
 
   const modalContent = (
     <div
-      className="fixed inset-0"
+      className="fixed inset-0 overflow-x-hidden"
       style={{ zIndex: 99999, pointerEvents: 'auto' }}
       aria-modal="true"
       role="dialog"
@@ -95,7 +95,7 @@ const PeriodModal = ({ isOpen, onClose }) => {
       {/* Contenedor del modal centrado (asegurar pointer-events para que elementos interactúen) */}
       <div className="absolute inset-0 flex items-center justify-center p-4 pointer-events-none">
         <div
-          className="relative bg-white rounded-3xl shadow-2xl w-full max-w-md max-h-[90vh] overflow-hidden flex flex-col pointer-events-auto"
+          className="relative bg-white rounded-3xl shadow-2xl w-full max-w-md max-h-[90vh] overflow-hidden flex flex-col pointer-events-auto min-w-0"
           onClick={(e) => e.stopPropagation()}
         >
           {/* Header */}
@@ -120,7 +120,7 @@ const PeriodModal = ({ isOpen, onClose }) => {
 
           {/* Content con scroll */}
           <div className="flex-1 overflow-y-auto">
-            <form onSubmit={handleSubmit} className="p-5 space-y-5">
+            <form onSubmit={handleSubmit} className="p-5 space-y-5 min-w-0">
               {/* Fecha de inicio */}
               <div>
                 <label className="flex items-center text-sm font-semibold text-gray-700 mb-2">
@@ -131,7 +131,7 @@ const PeriodModal = ({ isOpen, onClose }) => {
                   type="date"
                   value={startDate}
                   onChange={(e) => setStartDate(e.target.value)}
-                  className="w-full px-4 py-3 bg-gray-50 border-2 border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-pink-500 focus:border-pink-400 transition-all"
+                  className="w-full min-w-0 px-4 py-3 bg-gray-50 border-2 border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-pink-500 focus:border-pink-400 transition-all"
                   required
                 />
               </div>
@@ -147,7 +147,7 @@ const PeriodModal = ({ isOpen, onClose }) => {
                   value={endDate}
                   onChange={(e) => setEndDate(e.target.value)}
                   min={startDate}
-                  className="w-full px-4 py-3 bg-gray-50 border-2 border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-pink-500 focus:border-pink-400 transition-all"
+                  className="w-full min-w-0 px-4 py-3 bg-gray-50 border-2 border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-pink-500 focus:border-pink-400 transition-all"
                 />
                 <p className="text-xs text-gray-500 mt-2">
                   Deja en blanco si tu período aún no ha terminado
@@ -181,10 +181,10 @@ const PeriodModal = ({ isOpen, onClose }) => {
                         onChange={(e) => setFlow(e.target.value)}
                         className="sr-only"
                       />
-                      <div className={`w-10 h-10 bg-gradient-to-br ${option.gradient} rounded-xl flex items-center justify-center mr-3`}>
-                        <span className="text-lg">{option.emoji}</span>
-                      </div>
-                      <div className="flex-1">
+                      <div className={`w-10 h-10 bg-gradient-to-br ${option.gradient} rounded-xl flex items-center justify-center mr-3 flex-shrink-0`}>
+                          <span className="text-lg">{option.emoji}</span>
+                        </div>
+                        <div className="flex-1 min-w-0">
                         <p className="font-semibold text-gray-900">{option.label}</p>
                         <p className="text-sm text-gray-500">{option.description}</p>
                       </div>
