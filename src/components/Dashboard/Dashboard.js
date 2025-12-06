@@ -1,4 +1,3 @@
-// src/components/Dashboard/Dashboard.js
 import React, { useState, useEffect } from 'react';
 import { useCycle } from '../../contexts/CycleContext';
 import { useAuth } from '../../contexts/AuthContext';
