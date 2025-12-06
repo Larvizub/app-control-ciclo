@@ -85,7 +85,13 @@ const Calendar = () => {
               </div>
             </div>
             <button
-              onClick={() => setShowAddNote(true)}
+              onClick={() => {
+                if (!selectedDate) {
+                  // Si no hay fecha seleccionada, usar hoy
+                  setSelectedDate(new Date());
+                }
+                setShowAddNote(true);
+              }}
               className="flex items-center gap-2 px-5 py-2.5 bg-gradient-to-r from-pink-500 to-purple-600 text-white rounded-2xl hover:from-pink-600 hover:to-purple-700 transition-all duration-300 shadow-lg hover:shadow-xl hover:shadow-pink-500/30 font-medium"
             >
               <Plus className="w-4 h-4" />
@@ -246,9 +252,18 @@ const Calendar = () => {
                       )}
 
                       {/* Notas */}
-                      {dayNotes.length > 0 && (
-                        <div className="bg-gradient-to-br from-blue-50/80 to-indigo-50/80 rounded-2xl p-4">
-                          <h4 className="text-sm font-semibold text-gray-700 mb-2">Notas</h4>
+                      <div className="bg-gradient-to-br from-blue-50/80 to-indigo-50/80 rounded-2xl p-4">
+                        <div className="flex items-center justify-between mb-2">
+                          <h4 className="text-sm font-semibold text-gray-700">Notas</h4>
+                          <button
+                            onClick={() => setShowAddNote(true)}
+                            className="p-1.5 bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition-colors"
+                            title="Agregar nota a este día"
+                          >
+                            <Plus className="w-3.5 h-3.5" />
+                          </button>
+                        </div>
+                        {dayNotes.length > 0 ? (
                           <div className="space-y-2">
                             {dayNotes.map((note, index) => (
                               <div key={index} className="bg-white/80 p-3 rounded-xl text-sm shadow-sm">
@@ -259,8 +274,10 @@ const Calendar = () => {
                               </div>
                             ))}
                           </div>
-                        </div>
-                      )}
+                        ) : (
+                          <p className="text-xs text-gray-500 italic">Sin notas para este día</p>
+                        )}
+                      </div>
                     </div>
                   );
                 })()}
@@ -320,18 +337,20 @@ const Calendar = () => {
         <QuickNoteModal
           isOpen={showAddNote}
           onClose={()=>setShowAddNote(false)}
+          selectedDate={selectedDate || new Date()}
           onSave={async (payload) => {
             try {
               // Usar la fecha seleccionada o hoy
               const dateStr = selectedDate ? format(selectedDate, 'yyyy-MM-dd') : format(new Date(), 'yyyy-MM-dd');
               // El texto de la nota viene en payload.content o payload.title
               const noteText = payload.content || payload.title || '';
+              if (!noteText.trim()) {
+                throw new Error('La nota no puede estar vacía');
+              }
               await addSharedNote(dateStr, noteText, []);
             } catch (err) {
               console.error('Error guardando nota desde Calendar:', err);
               throw err;
-            } finally {
-              setShowAddNote(false);
             }
           }}
         />

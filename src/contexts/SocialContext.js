@@ -209,13 +209,17 @@ export const SocialProvider = ({ children }) => {
 
   // Agregar nota compartida
   const addSharedNote = useCallback(async (date, note, sharedWith = []) => {
-    if (!currentUser) return;
+    if (!currentUser) {
+      toast.error('Debes iniciar sesión para agregar notas');
+      return;
+    }
 
     try {
+      const authorName = userProfile?.name || currentUser.displayName || currentUser.email || 'Usuario';
       const noteData = {
         id: uuidv4(),
         authorId: currentUser.uid,
-        authorName: userProfile.name,
+        authorName,
         date,
         note,
         sharedWith: [currentUser.uid, ...sharedWith],

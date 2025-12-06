@@ -1,11 +1,21 @@
 import React, { useState, useLayoutEffect, useEffect, useRef } from 'react';
 import { createPortal } from 'react-dom';
-import { X } from 'lucide-react';
+import { X, Calendar } from 'lucide-react';
+import { format } from 'date-fns';
+import { es } from 'date-fns/locale';
 
-const QuickNoteModal = ({ isOpen, onClose, onSave }) => {
+const QuickNoteModal = ({ isOpen, onClose, onSave, selectedDate }) => {
   const [title, setTitle] = useState('');
   const [content, setContent] = useState('');
   const elRef = useRef(null);
+
+  // Reset form when modal opens
+  useEffect(() => {
+    if (isOpen) {
+      setTitle('');
+      setContent('');
+    }
+  }, [isOpen]);
 
   // Crear el nodo del portal en useLayoutEffect para evitar race condition
   useLayoutEffect(() => {
@@ -53,10 +63,15 @@ const QuickNoteModal = ({ isOpen, onClose, onSave }) => {
       <div className="absolute inset-0 bg-black bg-opacity-40" style={{ backdropFilter: 'blur(8px)', WebkitBackdropFilter: 'blur(8px)', pointerEvents: 'auto' }} onClick={onClose} />
       <div className="absolute inset-0 flex items-center justify-center p-4 pointer-events-none">
         <div className="relative bg-white rounded-3xl shadow-2xl w-full max-w-md max-h-[80vh] overflow-hidden flex flex-col pointer-events-auto" onClick={(e)=>e.stopPropagation()}>
-          <div className="flex items-center justify-between p-5 bg-gradient-to-r from-red-50 to-pink-50 border-b border-gray-200">
+          <div className="flex items-center justify-between p-5 bg-gradient-to-r from-blue-50 to-indigo-50 border-b border-gray-200">
             <div>
-              <h2 className="text-xl font-bold text-gray-900">Nueva Nota Rápida</h2>
-              <p className="text-sm text-gray-500">Guarda una idea o recordatorio</p>
+              <h2 className="text-xl font-bold text-gray-900">Nueva Nota</h2>
+              {selectedDate && (
+                <p className="text-sm text-blue-600 flex items-center gap-1 mt-1">
+                  <Calendar className="w-3.5 h-3.5" />
+                  {format(selectedDate, "d 'de' MMMM, yyyy", { locale: es })}
+                </p>
+              )}
             </div>
             <button type="button" onClick={onClose} className="p-2 text-gray-400 hover:text-gray-600 rounded-xl">
               <X className="w-6 h-6" />
