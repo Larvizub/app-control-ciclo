@@ -12,14 +12,23 @@ import {
   Calendar,
   Activity,
   Smile,
-  Bell
+  Bell,
+  Mail,
+  UserCheck,
+  UserX,
+  Link2,
+  Unlink
 } from 'lucide-react';
 import { useSocial } from '../../contexts/SocialContext';
 import { useCycle } from '../../contexts/CycleContext';
+import { useAuth } from '../../contexts/AuthContext';
+import toast from 'react-hot-toast';
 
 const ShareCycle = () => {
   const [activeTab, setActiveTab] = useState('overview');
   const [sharedWith, setSharedWith] = useState([]);
+  const [partnerEmail, setPartnerEmail] = useState('');
+  const [isInviting, setIsInviting] = useState(false);
   const [shareSettings, setShareSettings] = useState({
     periods: true,
     symptoms: true,
@@ -30,6 +39,7 @@ const ShareCycle = () => {
 
   const { friends, shareDataWith, getSharedData, updateShareSettings } = useSocial();
   const { currentPhase, nextPeriodDate } = useCycle();
+  const { userProfile, isMaleUser, shareWithPartner, stopSharingWithPartner } = useAuth();
 
   const loadSharedData = useCallback(async () => {
     try {
@@ -316,59 +326,226 @@ const ShareCycle = () => {
     </div>
   );
 
-  const renderPartner = () => (
-    <div className="space-y-6">
-      <div className="bg-gradient-to-r from-red-50 to-pink-50 rounded-xl p-6 border border-red-200">
-        <div className="flex items-center space-x-3 mb-4">
-          <Heart className="w-8 h-8 text-red-500" />
-          <h3 className="text-lg font-semibold text-gray-900">
-            Compartir con tu pareja
-          </h3>
+  const renderPartner = () => {
+    const hasPartner = userProfile?.partnerId;
+    
+    const handleInvitePartner = async () => {
+      if (!partnerEmail.trim()) {
+        toast.error('Por favor ingresa un correo electrónico');
+        return;
+      }
+      
+      if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(partnerEmail)) {
+        toast.error('Por favor ingresa un correo válido');
+        return;
+      }
+      
+      setIsInviting(true);
+      try {
+        await shareWithPartner(partnerEmail);
+        toast.success('¡Invitación enviada correctamente!');
+        setPartnerEmail('');
+      } catch (error) {
+        console.error('Error invitando pareja:', error);
+        toast.error('Error al enviar la invitación');
+      } finally {
+        setIsInviting(false);
+      }
+    };
+    
+    const handleUnlinkPartner = async () => {
+      if (window.confirm('¿Estás seguro de que deseas desvincular a tu pareja? Ella ya no podrá ver tu ciclo.')) {
+        try {
+          await stopSharingWithPartner();
+          toast.success('Pareja desvinculada correctamente');
+        } catch (error) {
+          console.error('Error desvinculando:', error);
+          toast.error('Error al desvincular');
+        }
+      }
+    };
+    
+    // Vista para usuarios masculinos
+    if (isMaleUser) {
+      return (
+        <div className="space-y-6">
+          <div className="bg-gradient-to-r from-blue-50 to-indigo-50 rounded-xl p-6 border border-blue-200">
+            <div className="flex items-center space-x-3 mb-4">
+              <Heart className="w-8 h-8 text-blue-500" />
+              <h3 className="text-lg font-semibold text-gray-900">
+                Conexión con tu pareja
+              </h3>
+            </div>
+            
+            {hasPartner ? (
+              <div className="space-y-4">
+                <div className="bg-white rounded-lg p-4 border border-blue-200">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center space-x-3">
+                      <div className="w-12 h-12 bg-gradient-to-br from-pink-400 to-purple-500 rounded-full flex items-center justify-center">
+                        <span className="text-white font-semibold text-lg">
+                          {userProfile?.partnerName?.charAt(0) || '♀'}
+                        </span>
+                      </div>
+                      <div>
+                        <p className="font-semibold text-gray-900">{userProfile?.partnerName || 'Tu pareja'}</p>
+                        <p className="text-sm text-gray-600">{userProfile?.partnerEmail}</p>
+                        <div className="flex items-center gap-1 mt-1">
+                          <Link2 className="w-3 h-3 text-green-500" />
+                          <span className="text-xs text-green-600">Vinculados</span>
+                        </div>
+                      </div>
+                    </div>
+                    <UserCheck className="w-8 h-8 text-green-500" />
+                  </div>
+                </div>
+                <p className="text-gray-600 text-sm">
+                  Estás conectado con tu pareja. Puedes ver su ciclo en el Dashboard y Calendario.
+                </p>
+              </div>
+            ) : (
+              <div className="text-center py-6">
+                <UserX className="w-16 h-16 text-gray-300 mx-auto mb-4" />
+                <h4 className="font-semibold text-gray-900 mb-2">No estás vinculado</h4>
+                <p className="text-gray-600 text-sm mb-4">
+                  Tu pareja debe invitarte desde su perfil usando tu correo electrónico para que puedas ver su ciclo.
+                </p>
+                <div className="bg-blue-100 rounded-lg p-3 text-sm text-blue-800">
+                  <strong>Tu correo:</strong> {userProfile?.email}
+                </div>
+              </div>
+            )}
+          </div>
         </div>
-        <p className="text-gray-600 mb-6">
-          Mantén a tu pareja informada sobre tu ciclo para una mejor comprensión y apoyo mutuo.
-        </p>
-        
-        <div className="bg-white rounded-lg p-4 border border-red-200">
-          <h4 className="font-semibold text-gray-900 mb-3">Beneficios de compartir:</h4>
-          <ul className="space-y-2 text-sm text-gray-600">
-            <li className="flex items-center space-x-2">
-              <Check className="w-4 h-4 text-green-500" />
-              <span>Mayor comprensión y empatía</span>
-            </li>
-            <li className="flex items-center space-x-2">
-              <Check className="w-4 h-4 text-green-500" />
-              <span>Planificación de actividades juntos</span>
-            </li>
-            <li className="flex items-center space-x-2">
-              <Check className="w-4 h-4 text-green-500" />
-              <span>Apoyo emocional en momentos difíciles</span>
-            </li>
-            <li className="flex items-center space-x-2">
-              <Check className="w-4 h-4 text-green-500" />
-              <span>Mejor comunicación en la relación</span>
-            </li>
-          </ul>
+      );
+    }
+    
+    // Vista para usuarios femeninos
+    return (
+      <div className="space-y-6">
+        <div className="bg-gradient-to-r from-red-50 to-pink-50 rounded-xl p-6 border border-red-200">
+          <div className="flex items-center space-x-3 mb-4">
+            <Heart className="w-8 h-8 text-red-500" />
+            <h3 className="text-lg font-semibold text-gray-900">
+              Compartir con tu pareja
+            </h3>
+          </div>
+          <p className="text-gray-600 mb-6">
+            Mantén a tu pareja informada sobre tu ciclo para una mejor comprensión y apoyo mutuo.
+          </p>
+          
+          {hasPartner ? (
+            // Pareja ya vinculada
+            <div className="space-y-4">
+              <div className="bg-white rounded-lg p-4 border border-green-200">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center space-x-3">
+                    <div className="w-12 h-12 bg-gradient-to-br from-blue-400 to-indigo-500 rounded-full flex items-center justify-center">
+                      <span className="text-white font-semibold text-lg">
+                        {userProfile?.partnerName?.charAt(0) || '♂'}
+                      </span>
+                    </div>
+                    <div>
+                      <p className="font-semibold text-gray-900">{userProfile?.partnerName || 'Tu pareja'}</p>
+                      <p className="text-sm text-gray-600">{userProfile?.partnerEmail}</p>
+                      <div className="flex items-center gap-1 mt-1">
+                        <Eye className="w-3 h-3 text-green-500" />
+                        <span className="text-xs text-green-600">Puede ver tu ciclo</span>
+                      </div>
+                    </div>
+                  </div>
+                  <UserCheck className="w-8 h-8 text-green-500" />
+                </div>
+              </div>
+              
+              <div className="bg-green-50 border border-green-200 rounded-lg p-4">
+                <h4 className="font-medium text-green-800 mb-2 flex items-center gap-2">
+                  <Check className="w-4 h-4" />
+                  Tu pareja puede ver:
+                </h4>
+                <ul className="text-sm text-green-700 space-y-1">
+                  <li>• Fechas de tu período</li>
+                  <li>• Fase actual del ciclo</li>
+                  <li>• Predicciones del próximo período</li>
+                  <li>• Síntomas registrados</li>
+                </ul>
+              </div>
+              
+              <button
+                onClick={handleUnlinkPartner}
+                className="w-full flex items-center justify-center gap-2 bg-red-100 text-red-700 py-3 px-4 rounded-lg font-medium hover:bg-red-200 transition-colors"
+              >
+                <Unlink className="w-4 h-4" />
+                Desvincular pareja
+              </button>
+            </div>
+          ) : (
+            // Sin pareja vinculada - mostrar formulario de invitación
+            <>
+              <div className="bg-white rounded-lg p-4 border border-red-200 mb-6">
+                <h4 className="font-semibold text-gray-900 mb-3">Beneficios de compartir:</h4>
+                <ul className="space-y-2 text-sm text-gray-600">
+                  <li className="flex items-center space-x-2">
+                    <Check className="w-4 h-4 text-green-500" />
+                    <span>Mayor comprensión y empatía</span>
+                  </li>
+                  <li className="flex items-center space-x-2">
+                    <Check className="w-4 h-4 text-green-500" />
+                    <span>Planificación de actividades juntos</span>
+                  </li>
+                  <li className="flex items-center space-x-2">
+                    <Check className="w-4 h-4 text-green-500" />
+                    <span>Apoyo emocional en momentos difíciles</span>
+                  </li>
+                  <li className="flex items-center space-x-2">
+                    <Check className="w-4 h-4 text-green-500" />
+                    <span>Consejos personalizados para él según tu fase</span>
+                  </li>
+                </ul>
+              </div>
+              
+              <div className="bg-white rounded-xl border border-gray-200 p-6">
+                <h4 className="font-semibold text-gray-900 mb-4 flex items-center gap-2">
+                  <Mail className="w-5 h-5 text-pink-500" />
+                  Invitar a tu pareja
+                </h4>
+                <p className="text-sm text-gray-600 mb-4">
+                  Ingresa el correo electrónico con el que tu pareja se registró o se registrará en la app.
+                </p>
+                <div className="space-y-4">
+                  <input
+                    type="email"
+                    value={partnerEmail}
+                    onChange={(e) => setPartnerEmail(e.target.value)}
+                    placeholder="correo@pareja.com"
+                    className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-pink-500 focus:border-pink-500"
+                    disabled={isInviting}
+                  />
+                  <button 
+                    onClick={handleInvitePartner}
+                    disabled={isInviting}
+                    className="w-full flex items-center justify-center gap-2 bg-gradient-to-r from-red-500 to-pink-600 text-white py-3 px-4 rounded-lg font-semibold hover:from-red-600 hover:to-pink-700 transition-all duration-200 disabled:opacity-50"
+                  >
+                    {isInviting ? (
+                      <>
+                        <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
+                        <span>Enviando...</span>
+                      </>
+                    ) : (
+                      <>
+                        <Heart className="w-5 h-5" />
+                        <span>Enviar invitación</span>
+                      </>
+                    )}
+                  </button>
+                </div>
+              </div>
+            </>
+          )}
         </div>
       </div>
-
-      <div className="bg-white rounded-xl border border-gray-200 p-6">
-        <h4 className="font-semibold text-gray-900 mb-4">
-          Invitar a tu pareja
-        </h4>
-        <div className="space-y-4">
-          <input
-            type="email"
-            placeholder="correo@pareja.com"
-            className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-pink-500 focus:border-pink-500"
-          />
-          <button className="w-full bg-gradient-to-r from-red-500 to-pink-600 text-white py-3 px-4 rounded-lg font-semibold hover:from-red-600 hover:to-pink-700 transition-all duration-200">
-            Enviar invitación
-          </button>
-        </div>
-      </div>
-    </div>
-  );
+    );
+  };
 
   const renderSettings = () => (
     <div className="space-y-6">
