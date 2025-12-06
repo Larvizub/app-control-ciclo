@@ -12,7 +12,7 @@ import {
 
 const CycleMapOptimized = React.memo(() => {
   const canvasRef = useRef(null);
-  const { getDayData, periods, predictions } = useCycle();
+  const { getDayData, periods } = useCycle();
 
   // Memoizar las fechas de rango para evitar recálculos innecesarios
   const dateRange = useMemo(() => {

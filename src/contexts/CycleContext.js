@@ -1,5 +1,5 @@
 // src/contexts/CycleContext.js
-import React, { createContext, useContext, useState, useEffect, useCallback, useMemo, useRef } from 'react';
+import React, { createContext, useContext, useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import { ref, set, get, push, onValue } from 'firebase/database';
 import { database } from '../config/firebase';
 import { useAuth } from './AuthContext';
@@ -24,6 +24,8 @@ export const useCycle = () => {
   }
   return context;
 };
+
+const LOCAL_KEY_SHARE = 'cycle_share_settings';
 
 export const CycleProvider = ({ children }) => {
   const { currentUser } = useAuth();
@@ -541,6 +543,83 @@ export const CycleProvider = ({ children }) => {
     }
   }, [currentUser, cycleSettings, addPeriod, updatePredictions]);
 
+  // --- Nuevo: settings de compartido (persistidos en localStorage) ---
+  const [shareSettings, setShareSettings] = useState(() => {
+    try {
+      const raw = localStorage.getItem(LOCAL_KEY_SHARE);
+      return raw
+        ? JSON.parse(raw)
+        : {
+            partnerId: null,
+            permissions: {
+              periods: true,
+              symptoms: true,
+              mood: true,
+              predictions: true,
+              notes: false
+            },
+            lastUpdated: null
+          };
+    } catch (e) {
+      return {
+        partnerId: null,
+        permissions: {
+          periods: true,
+          symptoms: true,
+          mood: true,
+          predictions: true,
+          notes: false
+        },
+        lastUpdated: null
+      };
+    }
+  });
+
+  useEffect(() => {
+    try {
+      localStorage.setItem(LOCAL_KEY_SHARE, JSON.stringify(shareSettings));
+    } catch (e) {
+      // persist fail silent
+    }
+  }, [shareSettings]);
+
+  const updateShareSettings = useCallback((patch) => {
+    setShareSettings((prev) => {
+      const merged = {
+        ...prev,
+        ...patch,
+        permissions: { ...(prev.permissions || {}), ...(patch.permissions || {}) },
+        lastUpdated: new Date().toISOString()
+      };
+      try { localStorage.setItem(LOCAL_KEY_SHARE, JSON.stringify(merged)); } catch {}
+      return merged;
+    });
+  }, []);
+
+  const getShareSettings = useCallback(() => shareSettings, [shareSettings]);
+
+  // --- Nuevo: obtener datos "compartibles" filtrados según permisos ---
+  // Se asume que en este contexto existen datos como `periods`, `symptoms`, `predictions`, `notes`.
+  const getSharedData = useCallback((forPartnerId) => {
+    const allowed = shareSettings && shareSettings.partnerId === forPartnerId
+      ? (shareSettings.permissions || {})
+      : {}; // si partnerId no coincide, no otorgar permisos
+
+    // Construir payload usando únicamente los estados disponibles en este contexto
+    const data = {
+      periods: allowed.periods ? (Array.isArray(periods) ? periods : []) : [],
+      symptoms: allowed.symptoms ? (Array.isArray(symptoms) ? symptoms : []) : [],
+      // Estado de ánimo: si no hay entradas separadas, intentar inferir desde symptoms (fallback vacío)
+      mood: allowed.mood ? (Array.isArray(cycleData?.mood) ? cycleData.mood : []) : [],
+      // Predicciones: puede ser objeto o null; estandarizar a arreglo cuando se comparte
+      predictions: allowed.predictions ? (predictions ? [predictions] : []) : [],
+      // Notas: tomar de cycleData si existe
+      notes: allowed.notes ? (Array.isArray(cycleData?.notes) ? cycleData.notes : []) : []
+    };
+
+    return data;
+  }, [shareSettings, periods, symptoms, predictions, cycleData]);
+
   const value = useMemo(() => ({
     cycleData,
     periods,
@@ -556,7 +635,12 @@ export const CycleProvider = ({ children }) => {
     getPhaseInfo,
     updatePredictions,
     setCycleSettings,
-    updateCycleSettings
+    updateCycleSettings,
+    // nuevo:
+    shareSettings,
+    updateShareSettings,
+    getShareSettings,
+    getSharedData,
   }), [
     cycleData,
     periods,
@@ -572,7 +656,12 @@ export const CycleProvider = ({ children }) => {
     getPhaseInfo,
     updatePredictions,
     setCycleSettings,
-    updateCycleSettings
+    updateCycleSettings,
+    // nuevo:
+    shareSettings,
+    updateShareSettings,
+    getShareSettings,
+    getSharedData,
   ]);
 
   // Efecto de limpieza para el gestor de actualizaciones
