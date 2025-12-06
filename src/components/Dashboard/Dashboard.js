@@ -9,6 +9,7 @@ import InsightsCard from './InsightsCard';
 import QuickActions from './QuickActions';
 import { format, startOfDay } from 'date-fns';
 import { es } from 'date-fns/locale';
+import { Sparkles, TrendingUp, Calendar } from 'lucide-react';
 
 const Dashboard = () => {
   const { currentUser, userProfile } = useAuth();
@@ -50,25 +51,33 @@ const Dashboard = () => {
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+      <div className="min-h-screen flex items-center justify-center">
         <div className="text-center">
-          <div className="w-12 h-12 border-4 border-pink-500 border-t-transparent rounded-full animate-spin mx-auto mb-4"></div>
-          <p className="text-gray-600">Cargando tu información...</p>
+          <div className="relative w-16 h-16 mx-auto mb-6">
+            <div className="absolute inset-0 rounded-full bg-gradient-to-r from-primary-500 via-secondary-500 to-accent-500 animate-spin"></div>
+            <div className="absolute inset-1 rounded-full bg-white"></div>
+            <div className="absolute inset-3 rounded-full bg-gradient-to-r from-primary-500 to-secondary-500 animate-pulse"></div>
+          </div>
+          <p className="text-gray-600 font-medium">Cargando tu información...</p>
         </div>
       </div>
     );
   }
 
   return (
-    <div className="min-h-screen bg-gray-50">
-      {/* Header */}
-      <header className="bg-white shadow-sm border-b border-gray-200">
+    <div className="min-h-screen">
+      {/* Header moderno con glassmorphism */}
+      <header className="sticky top-0 z-20 bg-white/70 backdrop-blur-xl border-b border-white/20">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="flex items-center justify-between h-16">
-            <div>
-              <h1 className="text-2xl font-bold text-gray-900">{greeting}</h1>
-              <p className="text-sm text-gray-600">
-                Hoy es {format(new Date(), "EEEE, d 'de' MMMM", { locale: es })}
+          <div className="flex items-center justify-between h-20">
+            <div className="animate-fade-in">
+              <div className="flex items-center gap-2 mb-1">
+                <h1 className="text-2xl font-bold text-gray-900">{greeting}</h1>
+                <Sparkles className="w-5 h-5 text-primary-500 animate-pulse" />
+              </div>
+              <p className="text-sm text-gray-500 flex items-center gap-2">
+                <Calendar className="w-4 h-4" />
+                {format(new Date(), "EEEE, d 'de' MMMM", { locale: es })}
               </p>
             </div>
             <QuickActions />
@@ -77,64 +86,79 @@ const Dashboard = () => {
       </header>
 
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
+        <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 lg:gap-8">
           {/* Columna principal */}
-          <div className="lg:col-span-8 space-y-8">
+          <div className="lg:col-span-8 space-y-6">
             {/* Información del día actual */}
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-              <TodayCard data={todayData} />
-              <NextPeriodCard predictions={predictions} />
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 md:gap-6">
+              <div className="animate-slide-up" style={{ animationDelay: '100ms' }}>
+                <TodayCard data={todayData} />
+              </div>
+              <div className="animate-slide-up" style={{ animationDelay: '200ms' }}>
+                <NextPeriodCard predictions={predictions} />
+              </div>
             </div>
 
             {/* Mapa del ciclo */}
-            <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
+            <div className="animate-slide-up bg-white/80 backdrop-blur-xl rounded-3xl shadow-soft-lg border border-white/60 p-6 lg:p-8" style={{ animationDelay: '300ms' }}>
               <div className="flex items-center justify-between mb-6">
-                <h2 className="text-xl font-semibold text-gray-900">
-                  Tu Ciclo Menstrual
-                </h2>
-                <span className="text-sm text-gray-500">
-                  Vista interactiva
-                </span>
+                <div>
+                  <h2 className="text-xl font-bold text-gray-900 flex items-center gap-2">
+                    Tu Ciclo Menstrual
+                    <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-gradient-to-r from-primary-100 to-secondary-100 text-primary-700">
+                      Interactivo
+                    </span>
+                  </h2>
+                  <p className="text-sm text-gray-500 mt-1">Visualiza y comprende tu ciclo</p>
+                </div>
+                <div className="p-2 bg-gradient-to-br from-primary-100 to-secondary-100 rounded-xl">
+                  <TrendingUp className="w-5 h-5 text-primary-600" />
+                </div>
               </div>
               <CycleMapVisual />
             </div>
 
             {/* Insights */}
-            <InsightsCard />
+            <div className="animate-slide-up" style={{ animationDelay: '400ms' }}>
+              <InsightsCard />
+            </div>
           </div>
 
-          {/* Sidebar */}
+          {/* Sidebar derecha */}
           <div className="lg:col-span-4 space-y-6">
             {/* Rastreador de síntomas */}
-            <SymptomTracker />
+            <div className="animate-slide-up" style={{ animationDelay: '200ms' }}>
+              <SymptomTracker />
+            </div>
 
-            {/* Recordatorios */}
-            <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
-              <h3 className="text-lg font-semibold text-gray-900 mb-4">
+            {/* Recordatorios con diseño moderno */}
+            <div className="animate-slide-up bg-white/80 backdrop-blur-xl rounded-3xl shadow-soft-lg border border-white/60 p-6" style={{ animationDelay: '300ms' }}>
+              <h3 className="text-lg font-bold text-gray-900 mb-4 flex items-center gap-2">
+                <span className="text-xl">🔔</span>
                 Recordatorios
               </h3>
               <div className="space-y-3">
                 {predictions?.nextPeriod && (
-                  <div className="flex items-center p-3 bg-pink-50 rounded-lg">
-                    <div className="w-2 h-2 bg-pink-500 rounded-full mr-3"></div>
-                    <div>
-                      <p className="text-sm font-medium text-pink-900">
+                  <div className="group flex items-center p-4 bg-gradient-to-r from-primary-50 to-pink-50 rounded-2xl border border-primary-100/50 hover:shadow-md transition-all duration-200 hover:-translate-y-0.5">
+                    <div className="w-3 h-3 bg-gradient-to-r from-primary-500 to-pink-500 rounded-full mr-4 group-hover:animate-pulse"></div>
+                    <div className="flex-1">
+                      <p className="text-sm font-semibold text-primary-900">
                         Próximo período
                       </p>
-                      <p className="text-xs text-pink-700">
+                      <p className="text-xs text-primary-600">
                         {format(new Date(predictions.nextPeriod.startDate), "d 'de' MMMM", { locale: es })}
                       </p>
                     </div>
                   </div>
                 )}
                 
-                <div className="flex items-center p-3 bg-blue-50 rounded-lg">
-                  <div className="w-2 h-2 bg-blue-500 rounded-full mr-3"></div>
-                  <div>
-                    <p className="text-sm font-medium text-blue-900">
+                <div className="group flex items-center p-4 bg-gradient-to-r from-blue-50 to-indigo-50 rounded-2xl border border-blue-100/50 hover:shadow-md transition-all duration-200 hover:-translate-y-0.5">
+                  <div className="w-3 h-3 bg-gradient-to-r from-blue-500 to-indigo-500 rounded-full mr-4 group-hover:animate-pulse"></div>
+                  <div className="flex-1">
+                    <p className="text-sm font-semibold text-blue-900">
                       Registrar síntomas
                     </p>
-                    <p className="text-xs text-blue-700">
+                    <p className="text-xs text-blue-600">
                       No olvides registrar cómo te sientes hoy
                     </p>
                   </div>
@@ -142,41 +166,47 @@ const Dashboard = () => {
               </div>
             </div>
 
-            {/* Tips de salud */}
-            <div className="bg-gradient-to-br from-purple-50 to-pink-50 rounded-xl p-6 border border-purple-100">
-              <h3 className="text-lg font-semibold text-purple-900 mb-4">
-                💡 Tip del día
+            {/* Tips de salud con diseño mejorado */}
+            <div className="animate-slide-up relative overflow-hidden bg-gradient-to-br from-secondary-100 via-primary-50 to-accent-50 rounded-3xl p-6 border border-white/60" style={{ animationDelay: '400ms' }}>
+              {/* Decoración */}
+              <div className="absolute top-0 right-0 w-32 h-32 bg-white/30 rounded-full blur-2xl -translate-y-1/2 translate-x-1/2"></div>
+              
+              <h3 className="relative text-lg font-bold text-secondary-900 mb-4 flex items-center gap-2">
+                <span className="text-xl">💡</span>
+                Tip del día
               </h3>
-              <div className="space-y-3">
+              <div className="relative space-y-3">
                 {todayData?.phaseInfo?.tips?.map((tip, index) => (
-                  <div key={index} className="text-sm text-purple-800">
-                    • {tip}
+                  <div key={index} className="flex items-start gap-3 p-3 bg-white/50 backdrop-blur-sm rounded-xl">
+                    <span className="text-secondary-500 mt-0.5">•</span>
+                    <span className="text-sm text-secondary-800">{tip}</span>
                   </div>
                 ))}
               </div>
             </div>
 
-            {/* Estadísticas rápidas */}
-            <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
-              <h3 className="text-lg font-semibold text-gray-900 mb-4">
+            {/* Estadísticas rápidas con diseño moderno */}
+            <div className="animate-slide-up bg-white/80 backdrop-blur-xl rounded-3xl shadow-soft-lg border border-white/60 p-6" style={{ animationDelay: '500ms' }}>
+              <h3 className="text-lg font-bold text-gray-900 mb-4 flex items-center gap-2">
+                <span className="text-xl">📊</span>
                 Estadísticas
               </h3>
               <div className="space-y-4">
-                <div className="flex justify-between items-center">
+                <div className="flex justify-between items-center p-3 bg-gray-50 rounded-xl hover:bg-gray-100 transition-colors">
                   <span className="text-sm text-gray-600">Períodos registrados</span>
-                  <span className="text-lg font-semibold text-gray-900">
+                  <span className="text-lg font-bold bg-gradient-to-r from-primary-600 to-secondary-600 bg-clip-text text-transparent">
                     {periods.length}
                   </span>
                 </div>
-                <div className="flex justify-between items-center">
+                <div className="flex justify-between items-center p-3 bg-gray-50 rounded-xl hover:bg-gray-100 transition-colors">
                   <span className="text-sm text-gray-600">Síntomas registrados</span>
-                  <span className="text-lg font-semibold text-gray-900">
+                  <span className="text-lg font-bold bg-gradient-to-r from-primary-600 to-secondary-600 bg-clip-text text-transparent">
                     {symptoms.length}
                   </span>
                 </div>
-                <div className="flex justify-between items-center">
+                <div className="flex justify-between items-center p-3 bg-gray-50 rounded-xl hover:bg-gray-100 transition-colors">
                   <span className="text-sm text-gray-600">Duración promedio</span>
-                  <span className="text-lg font-semibold text-gray-900">
+                  <span className="text-lg font-bold bg-gradient-to-r from-primary-600 to-secondary-600 bg-clip-text text-transparent">
                     28 días
                   </span>
                 </div>

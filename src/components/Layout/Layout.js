@@ -6,15 +6,22 @@ import MobileNavigation from './MobileNavigation';
 
 const Layout = () => {
   return (
-    <div className="min-h-screen bg-gray-50">
+    <div className="min-h-screen bg-gradient-to-br from-primary-50/50 via-white to-secondary-50/50 bg-fixed">
+      {/* Efectos de fondo decorativos */}
+      <div className="fixed inset-0 overflow-hidden pointer-events-none">
+        <div className="absolute -top-40 -right-40 w-80 h-80 bg-primary-200/30 rounded-full blur-3xl"></div>
+        <div className="absolute top-1/3 -left-20 w-60 h-60 bg-secondary-200/30 rounded-full blur-3xl"></div>
+        <div className="absolute bottom-20 right-1/4 w-40 h-40 bg-accent-200/20 rounded-full blur-3xl"></div>
+      </div>
+
       {/* Desktop Sidebar */}
-      <div className="hidden md:fixed md:inset-y-0 md:flex md:w-64 md:flex-col">
+      <div className="hidden md:fixed md:inset-y-0 md:flex md:w-72 md:flex-col z-30">
         <Sidebar />
       </div>
 
       {/* Main content */}
-      <div className="md:pl-64 flex flex-col flex-1">
-        <main className="flex-1">
+      <div className="md:pl-72 flex flex-col flex-1 relative z-10">
+        <main className="flex-1 pb-20 md:pb-0">
           <Outlet />
         </main>
       </div>

@@ -1,7 +1,7 @@
 // src/components/Dashboard/SymptomTracker.js
 import React, { useState } from 'react';
 import { useCycle } from '../../contexts/CycleContext';
-import { Plus, Check } from 'lucide-react';
+import { Plus, Check, Sparkles, Heart } from 'lucide-react';
 import { format } from 'date-fns';
 import { es } from 'date-fns/locale';
 
@@ -63,28 +63,36 @@ const SymptomTracker = () => {
   };
 
   return (
-    <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
+    <div className="bg-white/80 backdrop-blur-xl rounded-3xl shadow-soft-lg border border-white/60 p-6 hover:shadow-glow transition-all duration-500">
+      {/* Header */}
       <div className="flex items-center justify-between mb-4">
-        <h3 className="text-lg font-semibold text-gray-900">
-          Registrar Síntomas
-        </h3>
+        <div className="flex items-center gap-3">
+          <div className="w-10 h-10 bg-gradient-to-br from-purple-500 to-pink-500 rounded-2xl flex items-center justify-center shadow-lg">
+            <Heart className="w-5 h-5 text-white" />
+          </div>
+          <div>
+            <h3 className="text-lg font-bold text-gray-900">
+              Registrar Síntomas
+            </h3>
+            <p className="text-xs text-gray-500">
+              {format(new Date(), "EEEE, d 'de' MMMM", { locale: es })}
+            </p>
+          </div>
+        </div>
         <button
           onClick={() => setIsExpanded(!isExpanded)}
-          className="p-2 text-pink-500 hover:bg-pink-50 rounded-full transition-colors"
+          className="p-3 bg-gradient-to-br from-pink-500/10 to-purple-500/10 hover:from-pink-500/20 hover:to-purple-500/20 text-pink-600 rounded-2xl transition-all duration-300 hover:scale-105"
         >
-          <Plus className={`w-5 h-5 transition-transform ${isExpanded ? 'rotate-45' : ''}`} />
+          <Plus className={`w-5 h-5 transition-transform duration-300 ${isExpanded ? 'rotate-45' : ''}`} />
         </button>
       </div>
 
-      <div className="text-sm text-gray-600 mb-4">
-        {format(new Date(), "EEEE, d 'de' MMMM", { locale: es })}
-      </div>
-
       {isExpanded && (
-        <form onSubmit={handleSubmit} className="space-y-6">
+        <form onSubmit={handleSubmit} className="space-y-6 animate-fade-in">
           {/* Síntomas */}
-          <div>
-            <h4 className="text-sm font-medium text-gray-900 mb-3">
+          <div className="bg-gradient-to-br from-pink-50/80 to-purple-50/80 rounded-2xl p-4">
+            <h4 className="text-sm font-semibold text-gray-900 mb-3 flex items-center gap-2">
+              <Sparkles className="w-4 h-4 text-pink-500" />
               ¿Cómo te sientes?
             </h4>
             <div className="grid grid-cols-2 gap-2">
@@ -93,16 +101,16 @@ const SymptomTracker = () => {
                   key={symptom.id}
                   type="button"
                   onClick={() => toggleSymptom(symptom.id)}
-                  className={`flex items-center space-x-2 p-2 rounded-lg text-sm transition-colors ${
+                  className={`flex items-center space-x-2 p-3 rounded-xl text-sm transition-all duration-300 ${
                     selectedSymptoms.includes(symptom.id)
-                      ? 'bg-pink-100 text-pink-800 border border-pink-200'
-                      : 'bg-gray-50 text-gray-700 hover:bg-gray-100'
+                      ? 'bg-gradient-to-r from-pink-500 to-purple-500 text-white shadow-lg scale-[1.02]'
+                      : 'bg-white/80 text-gray-700 hover:bg-white hover:shadow-md backdrop-blur-sm'
                   }`}
                 >
-                  <span>{symptom.icon}</span>
-                  <span className="flex-1 text-left">{symptom.name}</span>
+                  <span className="text-lg">{symptom.icon}</span>
+                  <span className="flex-1 text-left font-medium">{symptom.name}</span>
                   {selectedSymptoms.includes(symptom.id) && (
-                    <Check className="w-4 h-4 text-pink-600" />
+                    <Check className="w-4 h-4 text-white" />
                   )}
                 </button>
               ))}
@@ -110,8 +118,9 @@ const SymptomTracker = () => {
           </div>
 
           {/* Estado de ánimo */}
-          <div>
-            <h4 className="text-sm font-medium text-gray-900 mb-3">
+          <div className="bg-gradient-to-br from-indigo-50/80 to-blue-50/80 rounded-2xl p-4">
+            <h4 className="text-sm font-semibold text-gray-900 mb-3 flex items-center gap-2">
+              <Sparkles className="w-4 h-4 text-indigo-500" />
               Estado de ánimo
             </h4>
             <div className="grid grid-cols-3 gap-2">
@@ -120,14 +129,14 @@ const SymptomTracker = () => {
                   key={moodOption.id}
                   type="button"
                   onClick={() => setMood(moodOption.id)}
-                  className={`flex flex-col items-center p-2 rounded-lg text-sm transition-colors ${
+                  className={`flex flex-col items-center p-3 rounded-xl text-sm transition-all duration-300 ${
                     mood === moodOption.id
-                      ? 'bg-purple-100 text-purple-800 border border-purple-200'
-                      : 'bg-gray-50 text-gray-700 hover:bg-gray-100'
+                      ? 'bg-gradient-to-r from-indigo-500 to-purple-500 text-white shadow-lg scale-[1.02]'
+                      : 'bg-white/80 text-gray-700 hover:bg-white hover:shadow-md backdrop-blur-sm'
                   }`}
                 >
-                  <span className="text-lg mb-1">{moodOption.icon}</span>
-                  <span className="text-xs">{moodOption.name}</span>
+                  <span className="text-2xl mb-1">{moodOption.icon}</span>
+                  <span className="text-xs font-medium">{moodOption.name}</span>
                 </button>
               ))}
             </div>
@@ -135,7 +144,7 @@ const SymptomTracker = () => {
 
           {/* Notas */}
           <div>
-            <label className="block text-sm font-medium text-gray-900 mb-2">
+            <label className="block text-sm font-semibold text-gray-900 mb-2">
               Notas adicionales
             </label>
             <textarea
@@ -143,23 +152,24 @@ const SymptomTracker = () => {
               onChange={(e) => setNotes(e.target.value)}
               placeholder="¿Algo más que quieras recordar?"
               rows={3}
-              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-pink-500 focus:border-pink-500 text-sm"
+              className="w-full px-4 py-3 bg-white/80 backdrop-blur-sm border border-gray-200/60 rounded-2xl focus:outline-none focus:ring-2 focus:ring-pink-500/50 focus:border-pink-300 text-sm transition-all duration-300 resize-none"
             />
           </div>
 
           {/* Botones */}
-          <div className="flex space-x-3">
+          <div className="flex gap-3">
             <button
               type="submit"
               disabled={selectedSymptoms.length === 0 && !mood && !notes.trim()}
-              className="flex-1 bg-gradient-to-r from-pink-500 to-purple-600 text-white py-2 px-4 rounded-lg font-semibold disabled:opacity-50 disabled:cursor-not-allowed hover:from-pink-600 hover:to-purple-700 transition-all duration-200"
+              className="flex-1 relative overflow-hidden bg-gradient-to-r from-pink-500 to-purple-600 text-white py-3 px-6 rounded-2xl font-semibold disabled:opacity-50 disabled:cursor-not-allowed hover:from-pink-600 hover:to-purple-700 transition-all duration-300 hover:shadow-glow hover:scale-[1.02]"
             >
-              Guardar
+              <span className="relative z-10">Guardar</span>
+              <div className="absolute inset-0 bg-gradient-to-r from-white/0 via-white/20 to-white/0 -translate-x-full hover:translate-x-full transition-transform duration-700"></div>
             </button>
             <button
               type="button"
               onClick={() => setIsExpanded(false)}
-              className="px-4 py-2 text-gray-600 hover:text-gray-800 transition-colors"
+              className="px-6 py-3 text-gray-600 hover:text-gray-800 hover:bg-gray-100/80 rounded-2xl transition-all duration-300 font-medium"
             >
               Cancelar
             </button>
@@ -168,14 +178,18 @@ const SymptomTracker = () => {
       )}
 
       {!isExpanded && (
-        <div className="text-center py-4">
-          <p className="text-sm text-gray-500 mb-2">
+        <div className="text-center py-6 bg-gradient-to-br from-pink-50/50 to-purple-50/50 rounded-2xl">
+          <div className="w-16 h-16 bg-gradient-to-br from-pink-100 to-purple-100 rounded-full flex items-center justify-center mx-auto mb-3">
+            <Heart className="w-8 h-8 text-pink-500" />
+          </div>
+          <p className="text-sm text-gray-600 mb-3">
             Registra cómo te sientes hoy
           </p>
           <button
             onClick={() => setIsExpanded(true)}
-            className="text-pink-600 hover:text-pink-700 text-sm font-medium"
+            className="inline-flex items-center gap-2 text-pink-600 hover:text-pink-700 text-sm font-semibold bg-pink-100/50 hover:bg-pink-100 px-4 py-2 rounded-xl transition-all duration-300"
           >
+            <Plus className="w-4 h-4" />
             Comenzar registro
           </button>
         </div>
