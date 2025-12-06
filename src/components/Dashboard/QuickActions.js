@@ -3,7 +3,7 @@ import React, { useState } from 'react';
 import { Plus, Droplet, MessageSquare } from 'lucide-react';
 import PeriodModal from '../Modals/PeriodModal';
 
-const QuickActions = () => {
+const QuickActions = ({ onOpenSymptom, onOpenQuickNote }) => {
   const [showPeriodModal, setShowPeriodModal] = useState(false);
 
   const actions = [
@@ -21,7 +21,7 @@ const QuickActions = () => {
       icon: Plus,
       gradient: 'from-purple-500 to-indigo-600',
       shadowColor: 'shadow-purple-500/30',
-      onClick: () => console.log('Síntomas')
+      onClick: () => (onOpenSymptom ? onOpenSymptom() : console.log('Síntomas'))
     },
     {
       id: 'notes',
@@ -29,7 +29,7 @@ const QuickActions = () => {
       icon: MessageSquare,
       gradient: 'from-blue-500 to-cyan-600',
       shadowColor: 'shadow-blue-500/30',
-      onClick: () => console.log('Nota')
+      onClick: () => (onOpenQuickNote ? onOpenQuickNote() : console.log('Nota'))
     }
   ];
 
@@ -41,6 +41,8 @@ const QuickActions = () => {
           return (
             <button
               key={action.id}
+              data-action={action.id === 'symptoms' ? 'open-symptom-modal' : action.id === 'notes' ? 'open-note-modal' : undefined}
+              aria-label={action.name}
               onClick={action.onClick}
               className={`group relative bg-gradient-to-br ${action.gradient} text-white p-3 rounded-2xl transition-all duration-300 hover:scale-110 hover:shadow-lg ${action.shadowColor} animate-fade-in`}
               style={{ animationDelay: `${index * 100}ms` }}

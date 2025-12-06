@@ -10,6 +10,8 @@ import QuickActions from './QuickActions';
 import { format, startOfDay } from 'date-fns';
 import { es } from 'date-fns/locale';
 import { Sparkles, TrendingUp, Calendar } from 'lucide-react';
+import SymptomModal from '../Modals/SymptomModal';
+import QuickNoteModal from '../Modals/QuickNoteModal';
 
 const Dashboard = () => {
   const { currentUser, userProfile } = useAuth();
@@ -18,11 +20,15 @@ const Dashboard = () => {
     getDayData, 
     periods, 
     symptoms, 
-    loading 
+    loading,
+    addSymptom,
+    addQuickNote
   } = useCycle();
   
   const [todayData, setTodayData] = useState(null);
   const [greeting, setGreeting] = useState('');
+  const [openSymptomModal, setOpenSymptomModal] = useState(false);
+  const [openNoteModal, setOpenNoteModal] = useState(false);
 
   // Obtener datos del día actual
   useEffect(() => {
@@ -48,6 +54,49 @@ const Dashboard = () => {
 
     setGreeting(getGreeting());
   }, [userProfile?.name, currentUser?.displayName]);
+
+  const handleSaveSymptom = async (payload) => {
+    if (addSymptom) return addSymptom(payload);
+    console.log('Guardar síntoma (payload):', payload);
+  };
+
+  const handleSaveNote = async (payload) => {
+    if (addQuickNote) return addQuickNote(payload);
+    console.log('Guardar nota rápida (payload):', payload);
+  };
+
+  // Enlace seguro y puntual a botones existentes (sin observers globales).
+  // 1) Si QuickActions acepta props onOpenSymptom/onOpenQuickNote lo usará.
+  // 2) Si los botones están fuera, este efecto busca selectores específicos y añade handler.
+  useEffect(() => {
+    // síntomas
+    const symptomSelector = '[data-action="open-symptom-modal"], [aria-label="Registrar síntomas"], button[title="Registrar síntomas"]';
+    const symEl = document.querySelector(symptomSelector);
+    if (symEl && symEl.dataset.boundSymptom !== '1') {
+      const h = () => setOpenSymptomModal(true);
+      symEl.addEventListener('click', h);
+      symEl.dataset.boundSymptom = '1';
+      return () => {
+        try { symEl.removeEventListener('click', h); delete symEl.dataset.boundSymptom; } catch (e) {}
+      };
+    }
+    return undefined;
+  }, []);
+
+  useEffect(() => {
+    // nota rápida
+    const noteSelector = '[data-action="open-note-modal"], [aria-label="Nota rápida"], button[title="Nota rápida"]';
+    const noteEl = document.querySelector(noteSelector);
+    if (noteEl && noteEl.dataset.boundNote !== '1') {
+      const h2 = () => setOpenNoteModal(true);
+      noteEl.addEventListener('click', h2);
+      noteEl.dataset.boundNote = '1';
+      return () => {
+        try { noteEl.removeEventListener('click', h2); delete noteEl.dataset.boundNote; } catch (e) {}
+      };
+    }
+    return undefined;
+  }, []);
 
   if (loading) {
     return (
@@ -80,7 +129,8 @@ const Dashboard = () => {
                 {format(new Date(), "EEEE, d 'de' MMMM", { locale: es })}
               </p>
             </div>
-            <QuickActions />
+            {/* pasar handlers a QuickActions para que use los botones internos si soporta props */}
+            <QuickActions onOpenSymptom={() => setOpenSymptomModal(true)} onOpenQuickNote={() => setOpenNoteModal(true)} />
           </div>
         </div>
       </header>
@@ -152,17 +202,19 @@ const Dashboard = () => {
                   </div>
                 )}
                 
-                <div className="group flex items-center p-4 bg-gradient-to-r from-blue-50 to-indigo-50 rounded-2xl border border-blue-100/50 hover:shadow-md transition-all duration-200 hover:-translate-y-0.5">
-                  <div className="w-3 h-3 bg-gradient-to-r from-blue-500 to-indigo-500 rounded-full mr-4 group-hover:animate-pulse"></div>
+                <button
+                  type="button"
+                  data-action="open-symptom-modal"
+                  onClick={() => setOpenSymptomModal(true)}
+                  className="group flex items-center w-full text-left p-4 bg-gradient-to-r from-blue-50 to-indigo-50 rounded-2xl border border-blue-100/50 hover:shadow-md transition-all duration-200 hover:-translate-y-0.5"
+                  aria-label="Registrar síntomas"
+                >
+                  <div className="w-3 h-3 bg-gradient-to-r from-blue-500 to-indigo-500 rounded-full mr-4 group-hover:animate-pulse" />
                   <div className="flex-1">
-                    <p className="text-sm font-semibold text-blue-900">
-                      Registrar síntomas
-                    </p>
-                    <p className="text-xs text-blue-600">
-                      No olvides registrar cómo te sientes hoy
-                    </p>
+                    <p className="text-sm font-semibold text-blue-900">Registrar síntomas</p>
+                    <p className="text-xs text-blue-600">No olvides registrar cómo te sientes hoy</p>
                   </div>
-                </div>
+                </button>
               </div>
             </div>
 
@@ -215,6 +267,9 @@ const Dashboard = () => {
           </div>
         </div>
       </main>
+
+      <SymptomModal isOpen={openSymptomModal} onClose={()=>setOpenSymptomModal(false)} onSave={handleSaveSymptom} />
+      <QuickNoteModal isOpen={openNoteModal} onClose={()=>setOpenNoteModal(false)} onSave={handleSaveNote} />
     </div>
   );
 };

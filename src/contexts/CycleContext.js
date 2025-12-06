@@ -13,6 +13,7 @@ import {
 } from 'date-fns';
 import toast from 'react-hot-toast';
 import { deepEqual, FirebaseUpdateManager } from '../utils/firebaseOptimizer';
+import { getDatabase, ref as refDb, push as pushDb, set as setDb } from 'firebase/database';
 
 const CycleContext = createContext();
 
@@ -220,29 +221,29 @@ export const CycleProvider = ({ children }) => {
     }
   }, [currentUser, updatePredictions]);
 
-  // Agregar síntoma
-  const addSymptom = useCallback(async (date, symptoms, mood = null, notes = '') => {
-    if (!currentUser) return;
-
+  // Agregar síntoma (estable, memoizado)
+  const addSymptom = useCallback(async (payload) => {
+    if (!currentUser) throw new Error('Usuario no autenticado');
     try {
-      const symptomData = {
-        date: format(date, 'yyyy-MM-dd'),
-        symptoms,
-        mood,
-        notes,
-        createdAt: new Date().toISOString(),
+      const db = getDatabase();
+      // usar la misma ruta que los listeners: "symptoms/{uid}"
+      const userRef = refDb(db, `symptoms/${currentUser.uid}`);
+      const newRef = pushDb(userRef);
+      const now = Date.now();
+      await setDb(newRef, {
+        ...payload,
+        createdAt: now,
+        createdAtISO: new Date(now).toISOString(),
         userId: currentUser.uid
-      };
-
-      const symptomsRef = ref(database, `symptoms/${currentUser.uid}`);
-      await push(symptomsRef, symptomData);
-      
-      toast.success('Síntomas registrados');
-    } catch (error) {
-      console.error('Error agregando síntomas:', error);
-      toast.error('Error al registrar síntomas');
+      });
+      return newRef.key;
+    } catch (err) {
+      console.error('addSymptom error:', err);
+      throw err;
     }
   }, [currentUser]);
+  
+  // exportar/adjuntar addSymptom en el contexto si aún no está
 
   // Calcular fase del ciclo
   const calculateCyclePhase = useCallback((date, lastPeriodStart, cycleLength = 28) => {
