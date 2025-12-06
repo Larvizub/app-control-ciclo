@@ -1,6 +1,7 @@
 // src/components/Calendar/Calendar.js
 import React, { useState } from 'react';
 import { useCycle } from '../../contexts/CycleContext';
+import QuickNoteModal from '../Modals/QuickNoteModal';
 import { useSocial } from '../../contexts/SocialContext';
 import { Calendar as CalendarIcon, Plus, MessageSquare, Sparkles, ChevronLeft, ChevronRight } from 'lucide-react';
 import { format, startOfMonth, endOfMonth, eachDayOfInterval, isSameDay } from 'date-fns';
@@ -9,13 +10,10 @@ import clsx from 'clsx';
 
 const Calendar = () => {
   const { getDayData } = useCycle();
-  const { notes } = useSocial();
+  const { notes, addSharedNote } = useSocial();
   const [currentDate, setCurrentDate] = useState(new Date());
   const [selectedDate, setSelectedDate] = useState(null);
   const [showAddNote, setShowAddNote] = useState(false);
-  
-  // Evitar warning de ESLint
-  console.log('showAddNote state:', showAddNote);
 
   const monthStart = startOfMonth(currentDate);
   const monthEnd = endOfMonth(currentDate);
@@ -25,10 +23,14 @@ const Calendar = () => {
     const dayData = getDayData(date);
     const isToday = isSameDay(date, new Date());
     const isSelected = selectedDate && isSameDay(date, selectedDate);
-    const hasNote = notes.some(note => note.date === format(date, 'yyyy-MM-dd'));
-    console.log('Day has note:', hasNote); // Para evitar warning
 
     let baseClasses = 'relative w-full h-24 p-2 border border-gray-100/60 cursor-pointer transition-all duration-300 hover:bg-white/80 hover:shadow-md rounded-xl';
+    
+    // Indicador visual si tiene nota
+    const hasNote = notes.some(note => note.date === format(date, 'yyyy-MM-dd'));
+    if (hasNote) {
+      baseClasses += ' ring-1 ring-blue-300';
+    }
     
     if (isToday) {
       baseClasses += ' ring-2 ring-pink-500 bg-gradient-to-br from-pink-50 to-purple-50 shadow-md';
@@ -315,6 +317,24 @@ const Calendar = () => {
           </div>
         </div>
       </main>
+        <QuickNoteModal
+          isOpen={showAddNote}
+          onClose={()=>setShowAddNote(false)}
+          onSave={async (payload) => {
+            try {
+              // Usar la fecha seleccionada o hoy
+              const dateStr = selectedDate ? format(selectedDate, 'yyyy-MM-dd') : format(new Date(), 'yyyy-MM-dd');
+              // El texto de la nota viene en payload.content o payload.title
+              const noteText = payload.content || payload.title || '';
+              await addSharedNote(dateStr, noteText, []);
+            } catch (err) {
+              console.error('Error guardando nota desde Calendar:', err);
+              throw err;
+            } finally {
+              setShowAddNote(false);
+            }
+          }}
+        />
     </div>
   );
 };
