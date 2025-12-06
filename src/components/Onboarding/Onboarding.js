@@ -1,5 +1,6 @@
 // src/components/Onboarding/Onboarding.js
 import React, { useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { 
   ChevronRight, 
   ChevronLeft, 
@@ -14,7 +15,9 @@ import { useAuth } from '../../contexts/AuthContext';
 import { useCycle } from '../../contexts/CycleContext';
 
 const Onboarding = () => {
+  const navigate = useNavigate();
   const [currentStep, setCurrentStep] = useState(0);
+  const [isLoading, setIsLoading] = useState(false);
   const [formData, setFormData] = useState({
     lastPeriodDate: '',
     cycleLength: 28,
@@ -105,6 +108,9 @@ const Onboarding = () => {
   };
 
   const handleComplete = async () => {
+    if (isLoading) return;
+    
+    setIsLoading(true);
     try {
       console.log('Iniciando proceso de onboarding...', formData);
       
@@ -140,11 +146,15 @@ const Onboarding = () => {
       }
 
       console.log('Onboarding completado exitosamente');
-      // No necesitamos onComplete() ya que ProtectedRoute redirigirá automáticamente
+      
+      // Redirigir al dashboard
+      navigate('/dashboard', { replace: true });
     } catch (error) {
       console.error('Error completing onboarding:', error);
       // Mostrar mensaje de error al usuario
       alert('Error al completar la configuración inicial. Por favor, inténtalo de nuevo.');
+    } finally {
+      setIsLoading(false);
     }
   };
 
@@ -511,13 +521,22 @@ const Onboarding = () => {
 
             <button
               onClick={currentStep === steps.length - 1 ? handleComplete : handleNext}
-              disabled={currentStep === 1 && !formData.lastPeriodDate}
+              disabled={(currentStep === 1 && !formData.lastPeriodDate) || isLoading}
               className="flex items-center space-x-2 bg-gradient-to-r from-pink-500 to-purple-600 text-white px-8 py-3 rounded-lg font-semibold hover:from-pink-600 hover:to-purple-700 transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed"
             >
-              <span>
-                {currentStep === steps.length - 1 ? 'Comenzar' : 'Siguiente'}
-              </span>
-              <ChevronRight className="w-5 h-5" />
+              {isLoading ? (
+                <>
+                  <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
+                  <span>Procesando...</span>
+                </>
+              ) : (
+                <>
+                  <span>
+                    {currentStep === steps.length - 1 ? 'Comenzar' : 'Siguiente'}
+                  </span>
+                  <ChevronRight className="w-5 h-5" />
+                </>
+              )}
             </button>
           </div>
         </div>
