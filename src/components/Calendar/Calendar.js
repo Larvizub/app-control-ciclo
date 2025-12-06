@@ -1,26 +1,151 @@
 // src/components/Calendar/Calendar.js
-import React, { useState } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { useCycle } from '../../contexts/CycleContext';
+import { useAuth } from '../../contexts/AuthContext';
 import QuickNoteModal from '../Modals/QuickNoteModal';
 import { useSocial } from '../../contexts/SocialContext';
-import { Calendar as CalendarIcon, Plus, MessageSquare, Sparkles, ChevronLeft, ChevronRight } from 'lucide-react';
-import { format, startOfMonth, endOfMonth, eachDayOfInterval, isSameDay } from 'date-fns';
+import { ref, onValue } from 'firebase/database';
+import { database } from '../../config/firebase';
+import { Calendar as CalendarIcon, Plus, MessageSquare, Sparkles, ChevronLeft, ChevronRight, Heart, Users } from 'lucide-react';
+import { format, startOfMonth, endOfMonth, eachDayOfInterval, isSameDay, parseISO, differenceInDays } from 'date-fns';
 import { es } from 'date-fns/locale';
 import clsx from 'clsx';
 
 const Calendar = () => {
   const { getDayData } = useCycle();
+  const { isMaleUser, userProfile } = useAuth();
   const { notes, addSharedNote } = useSocial();
   const [currentDate, setCurrentDate] = useState(new Date());
   const [selectedDate, setSelectedDate] = useState(null);
   const [showAddNote, setShowAddNote] = useState(false);
+  
+  // Estado para datos de la pareja (usuarios masculinos)
+  const [partnerPeriods, setPartnerPeriods] = useState([]);
+  const [partnerSymptoms, setPartnerSymptoms] = useState([]);
+
+  // Cargar datos de la pareja si es usuario masculino
+  const loadPartnerData = useCallback(() => {
+    if (!isMaleUser || !userProfile?.partnerId) {
+      return;
+    }
+
+    const partnerId = userProfile.partnerId;
+
+    // Cargar períodos de la pareja
+    const periodsRef = ref(database, `periods/${partnerId}`);
+    const unsubPeriods = onValue(periodsRef, (snapshot) => {
+      if (snapshot.exists()) {
+        const data = Object.entries(snapshot.val()).map(([id, val]) => ({ id, ...val }));
+        setPartnerPeriods(data.sort((a, b) => new Date(b.startDate) - new Date(a.startDate)));
+      } else {
+        setPartnerPeriods([]);
+      }
+    });
+
+    // Cargar síntomas de la pareja
+    const symptomsRef = ref(database, `symptoms/${partnerId}`);
+    const unsubSymptoms = onValue(symptomsRef, (snapshot) => {
+      if (snapshot.exists()) {
+        const data = Object.entries(snapshot.val()).map(([id, val]) => ({ id, ...val }));
+        setPartnerSymptoms(data);
+      } else {
+        setPartnerSymptoms([]);
+      }
+    });
+
+    return () => {
+      unsubPeriods();
+      unsubSymptoms();
+    };
+  }, [isMaleUser, userProfile?.partnerId]);
+
+  useEffect(() => {
+    const unsubscribe = loadPartnerData();
+    return () => {
+      if (unsubscribe) unsubscribe();
+    };
+  }, [loadPartnerData]);
+
+  // Obtener datos del día para usuario masculino (datos de pareja)
+  const getPartnerDayData = (date) => {
+    const dateStr = format(date, 'yyyy-MM-dd');
+    
+    // Verificar si hay período en esta fecha
+    let period = null;
+    let phase = 'unknown';
+    let dayOfCycle = 0;
+    
+    if (partnerPeriods.length > 0) {
+      const lastPeriod = partnerPeriods[0];
+      const periodStart = parseISO(lastPeriod.startDate);
+      dayOfCycle = differenceInDays(date, periodStart) + 1;
+      const cycleLength = 28;
+      
+      // Buscar si este día está en un período registrado
+      for (const p of partnerPeriods) {
+        const pStart = parseISO(p.startDate);
+        const pEnd = p.endDate ? parseISO(p.endDate) : null;
+        
+        if (pEnd) {
+          if (date >= pStart && date <= pEnd) {
+            period = p;
+            break;
+          }
+        } else {
+          // Si no tiene fecha de fin, asumir 5 días
+          const daysSinceStart = differenceInDays(date, pStart);
+          if (daysSinceStart >= 0 && daysSinceStart < 5) {
+            period = p;
+            break;
+          }
+        }
+      }
+      
+      // Calcular fase
+      if (dayOfCycle > 0 && dayOfCycle <= cycleLength + 7) {
+        if (dayOfCycle <= 5) phase = 'menstruation';
+        else if (dayOfCycle <= 13) phase = 'follicular';
+        else if (dayOfCycle <= 15) phase = 'ovulation';
+        else if (dayOfCycle <= cycleLength) phase = 'luteal';
+      }
+    }
+    
+    // Síntomas de este día
+    const daySymptoms = partnerSymptoms.filter(s => 
+      s.date === dateStr || format(parseISO(s.createdAt || s.date), 'yyyy-MM-dd') === dateStr
+    );
+    
+    const phaseNames = {
+      menstruation: 'Menstruación',
+      follicular: 'Fase Folicular',
+      ovulation: 'Ovulación',
+      luteal: 'Fase Lútea',
+      unknown: 'Sin datos'
+    };
+    
+    return {
+      period,
+      phase,
+      symptoms: daySymptoms,
+      dayOfCycle,
+      phaseInfo: { name: phaseNames[phase] }
+    };
+  };
+
+  // Función unificada para obtener datos del día
+  const getDayInfo = (date) => {
+    if (isMaleUser) {
+      return getPartnerDayData(date);
+    }
+    return getDayData(date);
+  };
 
   const monthStart = startOfMonth(currentDate);
   const monthEnd = endOfMonth(currentDate);
   const calendarDays = eachDayOfInterval({ start: monthStart, end: monthEnd });
 
   const getDayStyle = (date) => {
-    const dayData = getDayData(date);
+    const dayData = getDayInfo(date);
     const isToday = isSameDay(date, new Date());
     const isSelected = selectedDate && isSameDay(date, selectedDate);
 
@@ -33,7 +158,9 @@ const Calendar = () => {
     }
     
     if (isToday) {
-      baseClasses += ' ring-2 ring-pink-500 bg-gradient-to-br from-pink-50 to-purple-50 shadow-md';
+      baseClasses += isMaleUser 
+        ? ' ring-2 ring-blue-500 bg-gradient-to-br from-blue-50 to-indigo-50 shadow-md'
+        : ' ring-2 ring-pink-500 bg-gradient-to-br from-pink-50 to-purple-50 shadow-md';
     } else if (isSelected) {
       baseClasses += ' ring-2 ring-indigo-500 bg-gradient-to-br from-indigo-50 to-purple-50 shadow-md';
     }
@@ -68,26 +195,68 @@ const Calendar = () => {
   return (
     <div className="min-h-screen bg-gradient-to-br from-pink-50/50 via-white to-purple-50/50">
       {/* Decorative elements */}
-      <div className="fixed top-20 right-10 w-72 h-72 bg-gradient-to-br from-pink-200/30 to-purple-200/30 rounded-full blur-3xl pointer-events-none"></div>
+      <div className={clsx(
+        "fixed top-20 right-10 w-72 h-72 rounded-full blur-3xl pointer-events-none",
+        isMaleUser ? "bg-gradient-to-br from-blue-200/30 to-indigo-200/30" : "bg-gradient-to-br from-pink-200/30 to-purple-200/30"
+      )}></div>
       <div className="fixed bottom-20 left-10 w-96 h-96 bg-gradient-to-br from-indigo-200/20 to-blue-200/20 rounded-full blur-3xl pointer-events-none"></div>
 
+      {/* Banner para usuario masculino */}
+      {isMaleUser && userProfile?.partnerId && (
+        <div className="bg-gradient-to-r from-blue-500 to-indigo-600 text-white px-4 py-3">
+          <div className="max-w-7xl mx-auto flex items-center gap-3">
+            <Heart className="w-5 h-5" />
+            <span className="font-medium">
+              Viendo el calendario de {userProfile?.partnerName || 'tu pareja'}
+            </span>
+          </div>
+        </div>
+      )}
+
+      {/* Mensaje si no tiene pareja vinculada */}
+      {isMaleUser && !userProfile?.partnerId && (
+        <div className="max-w-7xl mx-auto px-4 py-8">
+          <div className="bg-white/80 backdrop-blur-xl rounded-3xl shadow-soft-lg border border-white/60 p-8 text-center">
+            <Users className="w-16 h-16 mx-auto text-blue-500 mb-4" />
+            <h2 className="text-2xl font-bold text-gray-900 mb-2">Sin pareja vinculada</h2>
+            <p className="text-gray-600 mb-4">
+              Para ver el calendario de tu pareja, ella debe invitarte desde su perfil usando tu correo electrónico.
+            </p>
+            <p className="text-sm text-gray-500">
+              Tu correo: <span className="font-medium text-blue-600">{userProfile?.email}</span>
+            </p>
+          </div>
+        </div>
+      )}
+
       {/* Header */}
+      {(!isMaleUser || userProfile?.partnerId) && (
       <header className="bg-white/80 backdrop-blur-xl shadow-soft border-b border-gray-200/60 sticky top-0 z-40">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex items-center justify-between h-20">
             <div className="flex items-center gap-4">
-              <div className="w-12 h-12 bg-gradient-to-br from-pink-500 to-purple-600 rounded-2xl flex items-center justify-center shadow-lg">
+              <div className={clsx(
+                "w-12 h-12 rounded-2xl flex items-center justify-center shadow-lg",
+                isMaleUser ? "bg-gradient-to-br from-blue-500 to-indigo-600" : "bg-gradient-to-br from-pink-500 to-purple-600"
+              )}>
                 <CalendarIcon className="w-6 h-6 text-white" />
               </div>
               <div>
-                <h1 className="text-2xl font-bold bg-gradient-to-r from-pink-600 to-purple-600 bg-clip-text text-transparent">Mi Calendario</h1>
-                <p className="text-sm text-gray-500">Seguimiento de tu ciclo</p>
+                <h1 className={clsx(
+                  "text-2xl font-bold bg-clip-text text-transparent",
+                  isMaleUser ? "bg-gradient-to-r from-blue-600 to-indigo-600" : "bg-gradient-to-r from-pink-600 to-purple-600"
+                )}>
+                  {isMaleUser ? 'Calendario de Pareja' : 'Mi Calendario'}
+                </h1>
+                <p className="text-sm text-gray-500">
+                  {isMaleUser ? `Ciclo de ${userProfile?.partnerName || 'tu pareja'}` : 'Seguimiento de tu ciclo'}
+                </p>
               </div>
             </div>
+            {!isMaleUser && (
             <button
               onClick={() => {
                 if (!selectedDate) {
-                  // Si no hay fecha seleccionada, usar hoy
                   setSelectedDate(new Date());
                 }
                 setShowAddNote(true);
@@ -97,20 +266,31 @@ const Calendar = () => {
               <Plus className="w-4 h-4" />
               <span>Agregar Nota</span>
             </button>
+            )}
           </div>
         </div>
       </header>
+      )}
 
+      {(!isMaleUser || userProfile?.partnerId) && (
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         <div className="grid grid-cols-1 lg:grid-cols-4 gap-8">
           {/* Calendario principal */}
           <div className="lg:col-span-3">
             <div className="bg-white/80 backdrop-blur-xl rounded-3xl shadow-soft-lg border border-white/60 overflow-hidden">
               {/* Header del calendario */}
-              <div className="flex items-center justify-between px-6 py-5 bg-gradient-to-r from-pink-50/80 via-purple-50/80 to-indigo-50/80 border-b border-gray-200/60">
+              <div className={clsx(
+                "flex items-center justify-between px-6 py-5 border-b border-gray-200/60",
+                isMaleUser 
+                  ? "bg-gradient-to-r from-blue-50/80 via-indigo-50/80 to-purple-50/80"
+                  : "bg-gradient-to-r from-pink-50/80 via-purple-50/80 to-indigo-50/80"
+              )}>
                 <button
                   onClick={() => navigateMonth(-1)}
-                  className="p-3 text-gray-600 hover:text-pink-600 hover:bg-white/80 rounded-xl transition-all duration-300 shadow-sm hover:shadow-md"
+                  className={clsx(
+                    "p-3 text-gray-600 hover:bg-white/80 rounded-xl transition-all duration-300 shadow-sm hover:shadow-md",
+                    isMaleUser ? "hover:text-blue-600" : "hover:text-pink-600"
+                  )}
                 >
                   <ChevronLeft className="w-5 h-5" />
                 </button>
@@ -119,7 +299,10 @@ const Calendar = () => {
                 </h2>
                 <button
                   onClick={() => navigateMonth(1)}
-                  className="p-3 text-gray-600 hover:text-pink-600 hover:bg-white/80 rounded-xl transition-all duration-300 shadow-sm hover:shadow-md"
+                  className={clsx(
+                    "p-3 text-gray-600 hover:bg-white/80 rounded-xl transition-all duration-300 shadow-sm hover:shadow-md",
+                    isMaleUser ? "hover:text-blue-600" : "hover:text-pink-600"
+                  )}
                 >
                   <ChevronRight className="w-5 h-5" />
                 </button>
@@ -137,7 +320,7 @@ const Calendar = () => {
               {/* Días del mes */}
               <div className="grid grid-cols-7 gap-1 p-2 bg-gray-50/30">
                 {calendarDays.map((date) => {
-                  const dayData = getDayData(date);
+                  const dayData = getDayInfo(date);
                   const dayNotes = notes.filter(note => note.date === format(date, 'yyyy-MM-dd'));
                   
                   return (
@@ -149,7 +332,11 @@ const Calendar = () => {
                       <div className="flex justify-between items-start">
                         <span className={clsx(
                           "text-sm font-semibold w-7 h-7 flex items-center justify-center rounded-lg",
-                          isSameDay(date, new Date()) ? "bg-gradient-to-br from-pink-500 to-purple-500 text-white shadow-md" : "text-gray-700"
+                          isSameDay(date, new Date()) 
+                            ? isMaleUser 
+                              ? "bg-gradient-to-br from-blue-500 to-indigo-500 text-white shadow-md"
+                              : "bg-gradient-to-br from-pink-500 to-purple-500 text-white shadow-md" 
+                            : "text-gray-700"
                         )}>
                           {format(date, 'd')}
                         </span>
@@ -204,18 +391,21 @@ const Calendar = () => {
             {selectedDate && (
               <div className="bg-white/80 backdrop-blur-xl rounded-3xl shadow-soft-lg border border-white/60 p-6 hover:shadow-glow transition-all duration-500">
                 <h3 className="text-lg font-bold text-gray-900 mb-4 flex items-center gap-2">
-                  <Sparkles className="w-4 h-4 text-pink-500" />
+                  <Sparkles className={clsx("w-4 h-4", isMaleUser ? "text-blue-500" : "text-pink-500")} />
                   {format(selectedDate, "d 'de' MMMM", { locale: es })}
                 </h3>
                 
                 {(() => {
-                  const dayData = getDayData(selectedDate);
+                  const dayData = getDayInfo(selectedDate);
                   const dayNotes = notes.filter(note => note.date === format(selectedDate, 'yyyy-MM-dd'));
                   
                   return (
                     <div className="space-y-4">
                       {/* Fase del ciclo */}
-                      <div className="bg-gradient-to-br from-pink-50/80 to-purple-50/80 rounded-2xl p-4">
+                      <div className={clsx(
+                        "rounded-2xl p-4",
+                        isMaleUser ? "bg-gradient-to-br from-blue-50/80 to-indigo-50/80" : "bg-gradient-to-br from-pink-50/80 to-purple-50/80"
+                      )}>
                         <h4 className="text-sm font-semibold text-gray-700 mb-2">Fase del ciclo</h4>
                         <div className={clsx(
                           'inline-flex items-center px-3 py-1.5 rounded-xl text-sm font-semibold',
@@ -255,6 +445,7 @@ const Calendar = () => {
                       <div className="bg-gradient-to-br from-blue-50/80 to-indigo-50/80 rounded-2xl p-4">
                         <div className="flex items-center justify-between mb-2">
                           <h4 className="text-sm font-semibold text-gray-700">Notas</h4>
+                          {!isMaleUser && (
                           <button
                             onClick={() => setShowAddNote(true)}
                             className="p-1.5 bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition-colors"
@@ -262,6 +453,7 @@ const Calendar = () => {
                           >
                             <Plus className="w-3.5 h-3.5" />
                           </button>
+                          )}
                         </div>
                         {dayNotes.length > 0 ? (
                           <div className="space-y-2">
@@ -334,6 +526,9 @@ const Calendar = () => {
           </div>
         </div>
       </main>
+      )}
+      
+      {!isMaleUser && (
         <QuickNoteModal
           isOpen={showAddNote}
           onClose={()=>setShowAddNote(false)}
@@ -354,6 +549,7 @@ const Calendar = () => {
             }
           }}
         />
+      )}
     </div>
   );
 };
