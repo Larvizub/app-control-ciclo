@@ -1,11 +1,13 @@
 // src/components/Profile/Profile.js
 import React, { useState } from 'react';
-import { User, Edit3, Save, Camera, Heart, Calendar, Activity, Users, Mail, X, Check, Share2 } from 'lucide-react';
+import { User, Edit3, Save, Camera, Heart, Calendar, Activity, Users, Mail, X, Check, Share2, LogOut } from 'lucide-react';
 import { useAuth } from '../../contexts/AuthContext';
 import { useCycle } from '../../contexts/CycleContext';
+import { useNavigate } from 'react-router-dom';
 
 const Profile = () => {
-  const { userProfile, currentUser, isFemaleUser, isMaleUser, shareWithPartner, stopSharingWithPartner, partnerProfile } = useAuth();
+  const { userProfile, currentUser, isFemaleUser, isMaleUser, shareWithPartner, stopSharingWithPartner, partnerProfile, logout } = useAuth();
+  const navigate = useNavigate();
   const { periods, symptoms, cycleSettings } = useCycle();
   const [isEditing, setIsEditing] = useState(false);
   const [editedProfile, setEditedProfile] = useState({
@@ -83,6 +85,17 @@ const Profile = () => {
   };
 
   const milestone = getNextMilestone();
+
+  const handleLogout = async () => {
+    const ok = window.confirm('¿Cerrar sesión?');
+    if (!ok) return;
+    try {
+      await logout();
+      navigate('/login');
+    } catch (err) {
+      console.error('Error cerrando sesión:', err);
+    }
+  };
 
   return (
     <div className="min-h-screen bg-gray-50">
@@ -369,6 +382,21 @@ const Profile = () => {
                 </div>
               </div>
             )}
+
+            {/* Cuenta - Cerrar sesión */}
+            <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
+              <h3 className="text-lg font-semibold text-gray-900 mb-4">Cuenta</h3>
+              <div className="space-y-3">
+                <p className="text-sm text-gray-600">Gestiona tu sesión y seguridad.</p>
+                <button
+                  onClick={handleLogout}
+                  className="w-full px-4 py-3 bg-red-50 text-red-600 rounded-xl font-semibold hover:bg-red-100 transition-colors flex items-center justify-center gap-2"
+                >
+                  <LogOut className="w-5 h-5" />
+                  Cerrar sesión
+                </button>
+              </div>
+            </div>
 
             {/* Actividad reciente */}
             <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">

@@ -49,7 +49,7 @@ const MobileNavigation = () => {
       {/* Efecto de blur del fondo */}
       <div className="absolute inset-0 bg-white/80 backdrop-blur-xl border-t border-white/20 shadow-soft-lg"></div>
       
-      <div className="relative grid grid-cols-5 h-18 safe-area-bottom">
+      <div className="relative grid grid-cols-5 h-24 safe-area-bottom">
         {navigation.map((item) => {
           const isActive = location.pathname === item.href;
           const Icon = item.icon;
@@ -59,7 +59,7 @@ const MobileNavigation = () => {
               key={item.name}
               to={item.href}
               className={clsx(
-                'flex flex-col items-center justify-center py-2 transition-all duration-200 relative group',
+                'flex flex-col items-center justify-center py-3 transition-all duration-200 relative group',
                 isActive ? 'text-primary-600' : 'text-gray-400'
               )}
             >
@@ -69,13 +69,13 @@ const MobileNavigation = () => {
               )}
               
               <div className={clsx(
-                'relative p-2 rounded-xl transition-all duration-200',
+                'relative p-3 rounded-xl transition-all duration-200',
                 isActive 
                   ? 'bg-gradient-to-br from-primary-500/10 to-secondary-500/10' 
                   : 'group-hover:bg-gray-100'
               )}>
                 <Icon className={clsx(
-                  'h-5 w-5 transition-transform duration-200',
+                  'h-6 w-6 transition-transform duration-200',
                   isActive ? 'scale-110' : 'group-hover:scale-105'
                 )} />
                 
@@ -88,7 +88,7 @@ const MobileNavigation = () => {
               </div>
               
               <span className={clsx(
-                'text-2xs font-medium mt-1 transition-colors',
+                'text-xs font-medium mt-1 transition-colors',
                 isActive ? 'text-primary-600' : 'text-gray-500'
               )}>
                 {item.name}
@@ -97,8 +97,8 @@ const MobileNavigation = () => {
           );
         })}
       </div>
+      {/* Nota: botón de cerrar sesión movido al perfil para evitar obstruir la UI móvil */}
     </div>
   );
 };
-
 export default MobileNavigation;
