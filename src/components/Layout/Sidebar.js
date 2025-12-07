@@ -18,11 +18,21 @@ import {
   Sparkles
 } from 'lucide-react';
 import clsx from 'clsx';
+import { useMemo } from 'react';
 
 const Sidebar = () => {
   const location = useLocation();
   const { logout, userProfile, isMaleUser } = useAuth();
-  const { friendRequests, onlineUsers } = useSocial();
+  const { friendRequests, onlineUsers, friends } = useSocial();
+
+  // Filtrar usuarios en línea para mostrar solo amigos y pareja
+  const filteredOnlineUsers = useMemo(() => {
+    const friendIds = friends.map(f => f.id || f.uid);
+    const partnerId = userProfile?.partnerId;
+    const allowedIds = [...friendIds];
+    if (partnerId) allowedIds.push(partnerId);
+    return onlineUsers.filter(user => allowedIds.includes(user.userId));
+  }, [friends, onlineUsers, userProfile?.partnerId]);
 
   const allNavigation = [
     {
@@ -184,7 +194,7 @@ const Sidebar = () => {
       </nav>
 
       {/* Estados de conexión con diseño mejorado */}
-      {onlineUsers.length > 0 && (
+      {filteredOnlineUsers.length > 0 && (
         <div className="mx-3 mb-3 px-4 py-3 bg-gradient-to-r from-green-50 to-emerald-50 rounded-xl border border-green-100">
           <div className="flex items-center space-x-2">
             <div className="relative">
@@ -192,7 +202,7 @@ const Sidebar = () => {
               <div className="absolute inset-0 w-2.5 h-2.5 bg-green-400 rounded-full animate-ping"></div>
             </div>
             <span className="text-xs font-medium text-green-700">
-              {onlineUsers.length} amiga{onlineUsers.length > 1 ? 's' : ''} en línea
+              {filteredOnlineUsers.length} amigo{filteredOnlineUsers.length > 1 ? 's' : ''} en línea
             </span>
           </div>
         </div>

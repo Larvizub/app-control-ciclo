@@ -1,7 +1,8 @@
 // src/components/Social/Social.js
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import { Users, MessageCircle, UserPlus, Share2, FileText } from 'lucide-react';
 import { useSocial } from '../../contexts/SocialContext';
+import { useAuth } from '../../contexts/AuthContext';
 import ChatList from '../Chat/ChatList';
 import SharedNotes from '../Sharing/SharedNotes';
 
@@ -15,6 +16,25 @@ const Social = () => {
     acceptFriendRequest,
     rejectFriendRequest
   } = useSocial();
+  const { userProfile } = useAuth();
+  
+  const [newFriendEmail, setNewFriendEmail] = useState('');
+  const [activeTab, setActiveTab] = useState('friends');
+
+  // Filtrar usuarios en línea para mostrar solo amigos y pareja
+  const filteredOnlineUsers = useMemo(() => {
+    // Obtener IDs de amigos
+    const friendIds = friends.map(f => f.id || f.uid);
+    // Agregar ID de la pareja si existe
+    const partnerId = userProfile?.partnerId;
+    const allowedIds = [...friendIds];
+    if (partnerId) {
+      allowedIds.push(partnerId);
+    }
+    
+    // Filtrar usuarios en línea que sean amigos o pareja
+    return onlineUsers.filter(user => allowedIds.includes(user.userId));
+  }, [friends, onlineUsers, userProfile?.partnerId]);
   
   const [newFriendEmail, setNewFriendEmail] = useState('');
   const [activeTab, setActiveTab] = useState('friends');
@@ -47,7 +67,7 @@ const Social = () => {
             <div className="flex items-center space-x-2">
               <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse"></div>
               <span className="text-sm text-gray-600">
-                {onlineUsers.length} en línea
+                {filteredOnlineUsers.length} amigos en línea
               </span>
             </div>
           </div>
@@ -81,14 +101,14 @@ const Social = () => {
               </form>
             </div>
 
-            {/* Usuarios en línea */}
-            {onlineUsers.length > 0 && (
+            {/* Amigos en línea */}
+            {filteredOnlineUsers.length > 0 && (
               <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
                 <h3 className="text-lg font-semibold text-gray-900 mb-4">
-                  En Línea Ahora
+                  Amigos en Línea
                 </h3>
                 <div className="space-y-3">
-                  {onlineUsers.slice(0, 5).map((user) => (
+                  {filteredOnlineUsers.slice(0, 5).map((user) => (
                     <div key={user.userId} className="flex items-center space-x-3">
                       <div className="relative">
                         <div className="w-8 h-8 bg-gradient-to-br from-pink-400 to-purple-500 rounded-full flex items-center justify-center">
