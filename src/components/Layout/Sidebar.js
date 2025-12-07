@@ -21,10 +21,10 @@ import clsx from 'clsx';
 
 const Sidebar = () => {
   const location = useLocation();
-  const { logout, userProfile } = useAuth();
+  const { logout, userProfile, isMaleUser } = useAuth();
   const { friendRequests, onlineUsers } = useSocial();
 
-  const navigation = [
+  const allNavigation = [
     {
       name: 'Dashboard',
       href: '/dashboard',
@@ -55,12 +55,14 @@ const Sidebar = () => {
     {
       name: 'Compartir Ciclo',
       href: '/share-cycle',
-      icon: Share2
+      icon: Share2,
+      hideForMale: true // Ocultar para usuarios masculinos
     },
     {
       name: 'Notas Compartidas',
       href: '/shared-notes',
-      icon: FileText
+      icon: FileText,
+      hideForMale: true // Ocultar para usuarios masculinos
     },
     {
       name: 'Perfil',
@@ -73,6 +75,11 @@ const Sidebar = () => {
       icon: Settings
     }
   ];
+
+  // Filtrar navegación según el tipo de usuario
+  const navigation = isMaleUser
+    ? allNavigation.filter(item => !item.hideForMale)
+    : allNavigation;
 
   const handleLogout = async () => {
     try {

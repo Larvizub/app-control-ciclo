@@ -10,8 +10,15 @@ const SharedView = () => {
   const shared = getSharedData(partnerId);
   const settings = getShareSettings();
 
+  // permitir que `partnerId` en la URL sea UID o email; validar contra shareSettings
+  const isAuthorizedPartner = !!(settings && (
+    settings.partnerId === partnerId ||
+    settings.partnerEmail === partnerId ||
+    (Array.isArray(settings.authorized) && settings.authorized.some(a => a.email === partnerId || a.uid === partnerId))
+  ));
+
   // si partnerId no coincide con configurado, mostrar mensaje
-  if (!settings || settings.partnerId !== partnerId) {
+  if (!isAuthorizedPartner) {
     return (
       <div className="p-6">
         <h2 className="text-lg font-semibold">Acceso no autorizado</h2>
@@ -32,7 +39,7 @@ const SharedView = () => {
             <ul className="list-disc ml-6">
               {shared.periods.map((p, i) => (
                 <li key={i}>
-                  {p.start ? `${p.start}` : 'fecha inicio'} - {p.end ? `${p.end}` : 'fecha fin'}
+                  {p.startDate ? `${p.startDate}` : (p.start || 'fecha inicio')} - {p.endDate ? `${p.endDate}` : (p.end || 'fecha fin')}
                 </li>
               ))}
             </ul>
@@ -48,7 +55,7 @@ const SharedView = () => {
             <ul className="list-disc ml-6">
               {shared.symptoms.map((s, i) => (
                 <li key={i}>
-                  <strong>{s.date || s.day}</strong>: {Array.isArray(s.items) ? s.items.join(', ') : s.note || JSON.stringify(s)}
+                  <strong>{s.date || s.createdAtISO || s.day}</strong>: {Array.isArray(s.items) ? s.items.join(', ') : s.note || s.text || JSON.stringify(s)}
                 </li>
               ))}
             </ul>
@@ -63,7 +70,7 @@ const SharedView = () => {
           {shared.mood && shared.mood.length > 0 ? (
             <ul className="list-disc ml-6">
               {shared.mood.map((m, i) => (
-                <li key={i}>{m.date}: {m.mood}</li>
+                <li key={i}>{m.date || m.createdAt || m.day}: {m.mood || m.value || JSON.stringify(m)}</li>
               ))}
             </ul>
           ) : <p className="text-sm text-gray-600">No hay registros de ánimo compartidos.</p>}
@@ -77,7 +84,7 @@ const SharedView = () => {
           {shared.predictions && shared.predictions.length > 0 ? (
             <ul className="list-disc ml-6">
               {shared.predictions.map((pred, i) => (
-                <li key={i}>{pred.date || pred.start}</li>
+                <li key={i}>{pred.nextPeriod?.startDate || pred.date || pred.start || JSON.stringify(pred)}</li>
               ))}
             </ul>
           ) : <p className="text-sm text-gray-600">No hay predicciones compartidas.</p>}
@@ -91,7 +98,7 @@ const SharedView = () => {
           {shared.notes && shared.notes.length > 0 ? (
             <ul className="list-disc ml-6">
               {shared.notes.map((n, i) => (
-                <li key={i}><strong>{n.date}</strong>: {n.text}</li>
+                <li key={i}><strong>{n.date || n.createdAt}</strong>: {n.text || n.body || JSON.stringify(n)}</li>
               ))}
             </ul>
           ) : <p className="text-sm text-gray-600">No hay notas compartidas.</p>}

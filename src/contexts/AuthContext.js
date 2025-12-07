@@ -10,7 +10,7 @@ import {
   GoogleAuthProvider,
   signInWithPopup
 } from 'firebase/auth';
-import { ref, set, get, query, orderByChild, equalTo, update } from 'firebase/database';
+import { ref, set, get, query, orderByChild, equalTo, update, onValue } from 'firebase/database';
 import { auth, database } from '../config/firebase';
 import toast from 'react-hot-toast';
 
@@ -86,9 +86,36 @@ export const AuthProvider = ({ children }) => {
     try {
       const result = await signInWithEmailAndPassword(auth, email, password);
       
-      // Actualizar último login
-      const userRef = ref(database, `users/${result.user.uid}/lastLogin`);
-      await set(userRef, new Date().toISOString());
+      // Verificar si existe el perfil en la DB, si no, crearlo
+      const userRef = ref(database, `users/${result.user.uid}`);
+      const snapshot = await get(userRef);
+      
+      if (!snapshot.exists()) {
+        // El usuario existe en Auth pero no en la DB - crear perfil
+        console.log('Usuario sin perfil en DB, creando...');
+        await set(userRef, {
+          uid: result.user.uid,
+          email: email,
+          name: result.user.displayName || email.split('@')[0],
+          createdAt: new Date().toISOString(),
+          lastLogin: new Date().toISOString(),
+          onboardingCompleted: false,
+          settings: {
+            notifications: true,
+            shareData: false,
+            theme: 'light',
+            language: 'es'
+          },
+          privacy: {
+            shareWithPartner: false,
+            allowFriendRequests: true,
+            publicProfile: false
+          }
+        });
+      } else {
+        // Actualizar último login
+        await set(ref(database, `users/${result.user.uid}/lastLogin`), new Date().toISOString());
+      }
       
       toast.success('¡Bienvenida de vuelta!');
       return result;
@@ -168,13 +195,38 @@ export const AuthProvider = ({ children }) => {
     }
   };
 
-  // Cargar perfil del usuario
+  // Cargar perfil del usuario (y crearlo si no existe)
   const loadUserProfile = async (uid) => {
     try {
       const userRef = ref(database, `users/${uid}`);
       const snapshot = await get(userRef);
       if (snapshot.exists()) {
         setUserProfile(snapshot.val());
+      } else {
+        // Crear perfil si no existe (usuario de Auth sin registro en DB)
+        console.log('Creando perfil para usuario existente en Auth:', uid);
+        const user = auth.currentUser;
+        const newProfile = {
+          uid: uid,
+          email: user?.email || '',
+          name: user?.displayName || user?.email?.split('@')[0] || 'Usuario',
+          createdAt: new Date().toISOString(),
+          lastLogin: new Date().toISOString(),
+          onboardingCompleted: false,
+          settings: {
+            notifications: true,
+            shareData: false,
+            theme: 'light',
+            language: 'es'
+          },
+          privacy: {
+            shareWithPartner: false,
+            allowFriendRequests: true,
+            publicProfile: false
+          }
+        };
+        await set(userRef, newProfile);
+        setUserProfile(newProfile);
       }
     } catch (error) {
       console.error('Error cargando perfil:', error);
@@ -393,9 +445,35 @@ export const AuthProvider = ({ children }) => {
     return unsubscribe;
   }, []);
 
+  // Listener en tiempo real para el perfil del usuario (para detectar cambios como partnerId)
+  useEffect(() => {
+    if (!currentUser) return;
+
+    console.log('AuthContext: Iniciando listener para usuario:', currentUser.uid);
+    const userRef = ref(database, `users/${currentUser.uid}`);
+    const unsubscribe = onValue(userRef, (snapshot) => {
+      if (snapshot.exists()) {
+        const profile = snapshot.val();
+        console.log('AuthContext: Perfil actualizado:', { 
+          uid: currentUser.uid, 
+          partnerId: profile.partnerId, 
+          userType: profile.userType,
+          partnerEmail: profile.partnerEmail 
+        });
+        setUserProfile(profile);
+      }
+    }, (error) => {
+      console.warn('Error en listener de perfil de usuario:', error);
+    });
+
+    return () => unsubscribe();
+  }, [currentUser]);
+
   // Cargar perfil de pareja cuando el usuario masculino tiene partnerId
   useEffect(() => {
+    console.log('AuthContext: Verificando carga de pareja:', { isMaleUser, partnerId: userProfile?.partnerId });
     if (isMaleUser && userProfile?.partnerId) {
+      console.log('AuthContext: Cargando perfil de pareja:', userProfile.partnerId);
       loadPartnerProfile(userProfile.partnerId);
     }
   }, [isMaleUser, userProfile?.partnerId, loadPartnerProfile]);

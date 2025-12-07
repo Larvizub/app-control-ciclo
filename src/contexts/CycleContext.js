@@ -550,8 +550,10 @@ export const CycleProvider = ({ children }) => {
       return raw
         ? JSON.parse(raw)
         : {
-            // backward compatible single partnerId
+            // backward compatible single partnerId (can be email or uid)
             partnerId: null,
+            // store partner email separately when available
+            partnerEmail: null,
             // array of authorized partners: { email, permissions, addedAt }
             authorized: [],
             permissions: {
@@ -566,6 +568,7 @@ export const CycleProvider = ({ children }) => {
     } catch (e) {
       return {
         partnerId: null,
+        partnerEmail: null,
         authorized: [],
         permissions: {
           periods: true,
@@ -640,10 +643,12 @@ export const CycleProvider = ({ children }) => {
         existing.push({ email, permissions: permissions || prev.permissions || {}, addedAt: now });
       }
 
+      // intentar resolver uid para el primer autorizado
       const merged = {
         ...prev,
         authorized: existing,
         partnerId: existing.length ? existing[0].email : null,
+        partnerEmail: existing.length ? existing[0].email : null,
         lastUpdated: now
       };
       try { localStorage.setItem(LOCAL_KEY_SHARE, JSON.stringify(merged)); } catch {}
@@ -652,6 +657,119 @@ export const CycleProvider = ({ children }) => {
       return merged;
     });
   }, [persistShareSettingsToDb]);
+
+  // Mejorada: intentar resolver UID por email, actualizar partnerId y crear relación bidireccional
+  const addAuthorizedWithResolve = useCallback(async (email, permissions = null) => {
+    if (!email || !currentUser) {
+      console.log('addAuthorizedWithResolve: email o currentUser faltante', { email, currentUser: !!currentUser });
+      return;
+    }
+    try {
+      const emailLower = email.toLowerCase();
+      console.log('addAuthorizedWithResolve: Buscando usuario con email:', emailLower);
+      
+      // Buscar usuario por email (sin query indexada, iteramos manualmente)
+      const usersRef = ref(database, 'users');
+      const snapshot = await get(usersRef);
+      
+      let userObj = null;
+      if (snapshot.exists()) {
+        const allUsers = snapshot.val();
+        for (const [uid, userData] of Object.entries(allUsers)) {
+          if (userData.email?.toLowerCase() === emailLower) {
+            userObj = { ...userData, uid };
+            break;
+          }
+        }
+      }
+      
+      console.log('addAuthorizedWithResolve: Resultado búsqueda:', !!userObj);
+      
+      if (userObj) {
+        const partnerUid = userObj.uid;
+        const partnerName = userObj.name || userObj.displayName || email;
+        const partnerEmail = userObj.email || email;
+
+        console.log('addAuthorizedWithResolve: Usuario encontrado:', { partnerUid, partnerName, partnerEmail });
+
+        // Obtener datos del usuario actual (femenino)
+        const currentUserRef = ref(database, `users/${currentUser.uid}`);
+        const currentUserSnapshot = await get(currentUserRef);
+        const currentUserData = currentUserSnapshot.exists() ? currentUserSnapshot.val() : {};
+        const currentUserName = currentUserData.name || currentUserData.displayName || currentUser.email;
+
+        const now = new Date().toISOString();
+
+        // 1. Crear relación de pareja (partnership) bidireccional
+        const partnershipData = {
+          odwifeId: currentUser.uid,
+          odwifeName: currentUserName,
+          odwifeEmail: currentUser.email,
+          partnerId: partnerUid,
+          partnerName: partnerName,
+          partnerEmail: partnerEmail,
+          sharedAt: now,
+          status: 'active',
+          permissions: permissions || { periods: true, symptoms: true, mood: true, predictions: true, notes: false }
+        };
+
+        console.log('addAuthorizedWithResolve: Guardando partnership...', partnershipData);
+
+        // Guardar partnership para ambos usuarios
+        await set(ref(database, `partnerships/${currentUser.uid}`), partnershipData);
+        await set(ref(database, `partnerships/${partnerUid}`), partnershipData);
+        console.log('addAuthorizedWithResolve: Partnerships guardados');
+
+        // 2. Actualizar perfil del usuario femenino (actual)
+        console.log('addAuthorizedWithResolve: Actualizando perfil femenino...');
+        await set(ref(database, `users/${currentUser.uid}/partnerId`), partnerUid);
+        await set(ref(database, `users/${currentUser.uid}/partnerEmail`), partnerEmail);
+        await set(ref(database, `users/${currentUser.uid}/partnerName`), partnerName);
+        await set(ref(database, `users/${currentUser.uid}/privacy/shareWithPartner`), true);
+        console.log('addAuthorizedWithResolve: Perfil femenino actualizado');
+
+        // 3. Actualizar perfil del usuario masculino (pareja)
+        console.log('addAuthorizedWithResolve: Actualizando perfil masculino con partnerId:', currentUser.uid);
+        await set(ref(database, `users/${partnerUid}/partnerId`), currentUser.uid);
+        await set(ref(database, `users/${partnerUid}/partnerEmail`), currentUser.email);
+        await set(ref(database, `users/${partnerUid}/partnerName`), currentUserName);
+        console.log('addAuthorizedWithResolve: Perfil masculino actualizado');
+
+        // 4. Actualizar shareSettings localmente
+        setShareSettings((prev) => {
+          const existing = Array.isArray(prev.authorized) ? [...prev.authorized] : [];
+          const idx = existing.findIndex(a => a.email === email);
+          if (idx >= 0) {
+            existing[idx] = { ...existing[idx], uid: partnerUid, permissions: permissions ? permissions : existing[idx].permissions, updatedAt: now };
+          } else {
+            existing.push({ email, uid: partnerUid, permissions: permissions || prev.permissions || {}, addedAt: now });
+          }
+          const merged = {
+            ...prev,
+            authorized: existing,
+            partnerId: partnerUid,
+            partnerEmail: email,
+            lastUpdated: now
+          };
+          try { localStorage.setItem(LOCAL_KEY_SHARE, JSON.stringify(merged)); } catch {}
+          persistShareSettingsToDb(merged);
+          return merged;
+        });
+
+        toast.success(`¡Ciclo compartido con ${partnerName}!`);
+        console.log('addAuthorizedWithResolve: ¡Vinculación completada exitosamente!');
+      } else {
+        // fallback: solo agregar por email (usuario no encontrado)
+        console.log('addAuthorizedWithResolve: Usuario NO encontrado con email:', email);
+        addAuthorized(email, permissions);
+        toast.error('Usuario no encontrado. El correo fue autorizado pero la vinculación completa requiere que tu pareja tenga cuenta.');
+      }
+    } catch (err) {
+      console.error('addAuthorizedWithResolve: Error:', err);
+      addAuthorized(email, permissions);
+      toast.error('Error al vincular. El correo fue autorizado de forma local.');
+    }
+  }, [currentUser, persistShareSettingsToDb, addAuthorized]);
 
   const removeAuthorized = useCallback((email) => {
     if (!email) return;
@@ -713,9 +831,14 @@ export const CycleProvider = ({ children }) => {
   // --- Nuevo: obtener datos "compartibles" filtrados según permisos ---
   // Se asume que en este contexto existen datos como `periods`, `symptoms`, `predictions`, `notes`.
   const getSharedData = useCallback((forPartnerId) => {
-    const allowed = shareSettings && shareSettings.partnerId === forPartnerId
-      ? (shareSettings.permissions || {})
-      : {}; // si partnerId no coincide, no otorgar permisos
+    // forPartnerId puede ser uid o email. Verificamos varias opciones para compatibilidad.
+    const matchesPartner = !!(shareSettings && (
+      shareSettings.partnerId === forPartnerId ||
+      shareSettings.partnerEmail === forPartnerId ||
+      (Array.isArray(shareSettings.authorized) && shareSettings.authorized.some(a => a.email === forPartnerId || a.uid === forPartnerId))
+    ));
+
+    const allowed = matchesPartner ? (shareSettings.permissions || {}) : {}; // si partner no coincide, no otorgar permisos
 
     // Construir payload usando únicamente los estados disponibles en este contexto
     const data = {
@@ -754,6 +877,7 @@ export const CycleProvider = ({ children }) => {
     getShareSettings,
     getSharedData,
     addAuthorized,
+    addAuthorizedWithResolve,
     removeAuthorized,
   }), [
     cycleData,
@@ -777,6 +901,7 @@ export const CycleProvider = ({ children }) => {
     getShareSettings,
     getSharedData,
     addAuthorized,
+    addAuthorizedWithResolve,
     removeAuthorized,
   ]);
 

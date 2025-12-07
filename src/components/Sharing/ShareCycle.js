@@ -13,21 +13,26 @@ import {
   Activity,
   Smile,
   Bell,
-  Mail,
   UserCheck,
   UserX,
   Link2,
-  Unlink
+  Unlink,
+  Key,
+  Copy,
+  RefreshCw
 } from 'lucide-react';
 import { useSocial } from '../../contexts/SocialContext';
 import { useCycle } from '../../contexts/CycleContext';
 import { useAuth } from '../../contexts/AuthContext';
+import { ref, set, get } from 'firebase/database';
+import { database } from '../../config/firebase';
 import toast from 'react-hot-toast';
 
 const ShareCycle = () => {
   const [activeTab, setActiveTab] = useState('overview');
   const [sharedWith, setSharedWith] = useState([]);
-  const [partnerEmail, setPartnerEmail] = useState('');
+  const [linkCode, setLinkCode] = useState('');
+  const [generatingCode, setGeneratingCode] = useState(false);
   const [localShareSettings, setLocalShareSettings] = useState({
     periods: true,
     symptoms: true,
@@ -37,8 +42,70 @@ const ShareCycle = () => {
   });
 
   const { friends, shareCycleWith, sharedUsers } = useSocial();
-  const { currentPhase, nextPeriodDate, shareSettings: contextShareSettings, updateShareSettings, addAuthorized, removeAuthorized } = useCycle();
-  const { userProfile, isMaleUser, stopSharingWithPartner } = useAuth();
+  const { currentPhase, nextPeriodDate, shareSettings: contextShareSettings, removeAuthorized } = useCycle();
+  const { currentUser, userProfile, isMaleUser, stopSharingWithPartner } = useAuth();
+
+  // Cargar código existente al montar
+  useEffect(() => {
+    const loadExistingCode = async () => {
+      try {
+        const userRef = ref(database, `users/${currentUser.uid}/linkCode`);
+        const snapshot = await get(userRef);
+        if (snapshot.exists()) {
+          setLinkCode(snapshot.val());
+        }
+      } catch (err) {
+        console.error('Error cargando código:', err);
+      }
+    };
+
+    if (currentUser && !isMaleUser) {
+      loadExistingCode();
+    }
+  }, [currentUser, isMaleUser]);
+
+  // Generar código de vinculación
+  const generateLinkCode = async () => {
+    setGeneratingCode(true);
+    try {
+      // Generar código aleatorio de 6 caracteres
+      const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+      let code = '';
+      for (let i = 0; i < 6; i++) {
+        code += chars.charAt(Math.floor(Math.random() * chars.length));
+      }
+
+      const now = new Date().toISOString();
+      const codeData = {
+        code,
+        odwifeId: currentUser.uid,
+        odwifeName: userProfile?.name || currentUser?.displayName || 'Usuario',
+        odwifeEmail: currentUser.email,
+        createdAt: now,
+        expiresAt: new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString() // 24 horas
+      };
+
+      // Guardar código en la base de datos
+      await set(ref(database, `linkCodes/${code}`), codeData);
+      
+      // Guardar código en el perfil del usuario
+      await set(ref(database, `users/${currentUser.uid}/linkCode`), code);
+
+      setLinkCode(code);
+      toast.success('¡Código generado! Compártelo con tu pareja');
+    } catch (err) {
+      console.error('Error generando código:', err);
+      toast.error('Error al generar código');
+    } finally {
+      setGeneratingCode(false);
+    }
+  };
+
+  // Copiar código al portapapeles
+  const copyCode = () => {
+    navigator.clipboard.writeText(linkCode);
+    toast.success('Código copiado al portapapeles');
+  };
 
   // Cargar datos compartidos desde sharedUsers
   useEffect(() => {
@@ -441,7 +508,7 @@ const ShareCycle = () => {
               </button>
             </div>
           ) : (
-            // Sin pareja vinculada - mostrar formulario de invitación
+            // Sin pareja vinculada - Sistema de código de vinculación
             <>
               <div className="bg-white rounded-lg p-4 border border-red-200 mb-6">
                 <h4 className="font-semibold text-gray-900 mb-3">Beneficios de compartir:</h4>
@@ -465,71 +532,74 @@ const ShareCycle = () => {
                 </ul>
               </div>
               
-              <div className="bg-white rounded-xl border border-gray-200 p-6">
+              {/* NUEVO: Sistema de código de vinculación */}
+              <div className="bg-gradient-to-r from-purple-50 to-pink-50 rounded-xl border border-purple-200 p-6">
                 <h4 className="font-semibold text-gray-900 mb-4 flex items-center gap-2">
-                  <Mail className="w-5 h-5 text-pink-500" />
-                  Autorizar a tu pareja
+                  <Key className="w-5 h-5 text-purple-500" />
+                  Generar código de vinculación
                 </h4>
                 <p className="text-sm text-gray-600 mb-4">
-                  Ingresa el correo que estará autorizado para ver la información que selecciones. No se enviará ningún correo ni notificación automática.
+                  Genera un código único y compártelo con tu pareja. Él lo ingresará en su app para conectarse contigo.
                 </p>
 
-                <div className="space-y-4">
-                  <input
-                    type="email"
-                    value={partnerEmail}
-                    onChange={(e) => setPartnerEmail(e.target.value)}
-                    placeholder="correo@pareja.com"
-                    className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-pink-500 focus:border-pink-500"
-                  />
-
-                  <div className="flex gap-2">
-                    <button
-                      onClick={() => {
-                        // validar básico
-                        const email = (partnerEmail || '').trim();
-                        if (!email) { toast.error('Por favor ingresa un correo'); return; }
-                        if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) { toast.error('Correo inválido'); return; }
-                        // Guardar como autorizado en shareSettings (sin enviar correo)
-                            if (typeof addAuthorized === 'function') {
-                              addAuthorized(email, contextShareSettings?.permissions || { periods: true, symptoms: true, mood: true, predictions: true, notes: false });
-                              toast.success('Correo autorizado');
-                              setPartnerEmail('');
-                            } else if (typeof updateShareSettings === 'function') {
-                              // fallback por compatibilidad
-                              updateShareSettings({ partnerId: email, permissions: contextShareSettings?.permissions || { periods: true, symptoms: true, mood: true, predictions: true, notes: false } });
-                              toast.success('Correo autorizado (compatibilidad)');
-                              setPartnerEmail('');
-                            } else {
-                              toast.error('Función de autorización no disponible');
-                            }
-                      }}
-                      className="w-full flex items-center justify-center gap-2 bg-gradient-to-r from-red-500 to-pink-600 text-white py-3 px-4 rounded-lg font-semibold hover:from-red-600 hover:to-pink-700 transition-all duration-200"
-                    >
-                      <Heart className="w-5 h-5" />
-                      <span>Autorizar</span>
-                    </button>
-
-                    <button
-                      onClick={() => {
-                          // eliminar autorización local: preferir removeAuthorized sobre parchear partnerId
-                          const emailToRemove = contextShareSettings?.partnerId || null;
-                          if (emailToRemove && typeof removeAuthorized === 'function') {
-                            removeAuthorized(emailToRemove);
-                            toast.success('Autorización eliminada');
-                          } else if (typeof updateShareSettings === 'function') {
-                            updateShareSettings({ partnerId: null });
-                            toast.success('Autorización eliminada (compatibilidad)');
-                          } else {
-                            toast.error('Función de eliminación no disponible');
-                          }
-                        }}
-                      className="w-40 flex items-center justify-center gap-2 border border-gray-300 py-3 px-4 rounded-lg text-sm"
-                    >
-                      Eliminar autorización
-                    </button>
+                {linkCode ? (
+                  // Mostrar código generado
+                  <div className="space-y-4">
+                    <div className="bg-white rounded-xl p-6 border-2 border-dashed border-purple-300 text-center">
+                      <p className="text-sm text-gray-500 mb-2">Tu código de vinculación:</p>
+                      <div className="text-4xl font-mono font-bold tracking-[0.3em] text-purple-600 mb-2">
+                        {linkCode}
+                      </div>
+                      <p className="text-xs text-gray-400">Válido por 24 horas</p>
+                    </div>
+                    
+                    <div className="flex gap-2">
+                      <button
+                        onClick={copyCode}
+                        className="flex-1 flex items-center justify-center gap-2 bg-purple-100 text-purple-700 py-3 px-4 rounded-lg font-medium hover:bg-purple-200 transition-colors"
+                      >
+                        <Copy className="w-4 h-4" />
+                        Copiar código
+                      </button>
+                      <button
+                        onClick={generateLinkCode}
+                        disabled={generatingCode}
+                        className="flex items-center justify-center gap-2 bg-gray-100 text-gray-700 py-3 px-4 rounded-lg font-medium hover:bg-gray-200 transition-colors"
+                      >
+                        <RefreshCw className={`w-4 h-4 ${generatingCode ? 'animate-spin' : ''}`} />
+                      </button>
+                    </div>
+                    
+                    <div className="bg-blue-50 rounded-lg p-4 text-sm text-blue-800">
+                      <strong>Instrucciones para tu pareja:</strong>
+                      <ol className="mt-2 space-y-1 list-decimal list-inside">
+                        <li>Abre CicloApp en su celular</li>
+                        <li>Va al Dashboard</li>
+                        <li>Ingresa el código <strong>{linkCode}</strong></li>
+                        <li>¡Listo! Estarán conectados</li>
+                      </ol>
+                    </div>
                   </div>
-                </div>
+                ) : (
+                  // Botón para generar código
+                  <button
+                    onClick={generateLinkCode}
+                    disabled={generatingCode}
+                    className="w-full flex items-center justify-center gap-2 bg-gradient-to-r from-purple-500 to-pink-600 text-white py-4 px-6 rounded-xl font-semibold hover:from-purple-600 hover:to-pink-700 transition-all disabled:opacity-50"
+                  >
+                    {generatingCode ? (
+                      <>
+                        <RefreshCw className="w-5 h-5 animate-spin" />
+                        <span>Generando...</span>
+                      </>
+                    ) : (
+                      <>
+                        <Key className="w-5 h-5" />
+                        <span>Generar código de vinculación</span>
+                      </>
+                    )}
+                  </button>
+                )}
               </div>
             </>
           )}

@@ -1,14 +1,14 @@
 // src/components/Dashboard/DashboardMale.js
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useAuth } from '../../contexts/AuthContext';
-import { ref, onValue } from 'firebase/database';
+import { ref, onValue, get, set } from 'firebase/database';
 import { database } from '../../config/firebase';
+import toast from 'react-hot-toast';
 import { format, parseISO, differenceInDays } from 'date-fns';
 import { es } from 'date-fns/locale';
-import { 
+import {
   Heart, 
   Calendar, 
-  MessageSquare, 
   Sparkles, 
   AlertCircle,
   Gift,
@@ -16,42 +16,65 @@ import {
   Moon,
   Sun,
   Users,
-  Bell,
-  Activity
+  Activity,
+  Link2,
+  Key
 } from 'lucide-react';
 
 const DashboardMale = () => {
-  const { currentUser, userProfile, partnerProfile } = useAuth();
+  const { currentUser, userProfile } = useAuth();
+  const [partnerData, setPartnerData] = useState(null);
   const [partnerPeriods, setPartnerPeriods] = useState([]);
   const [partnerPredictions, setPartnerPredictions] = useState(null);
   const [partnerSymptoms, setPartnerSymptoms] = useState([]);
   const [loading, setLoading] = useState(true);
   const [greeting, setGreeting] = useState('');
+  const [linkCode, setLinkCode] = useState('');
+  const [linking, setLinking] = useState(false);
 
   // Configurar saludo
   useEffect(() => {
-    const getGreeting = () => {
-      const hour = new Date().getHours();
-      const name = userProfile?.name || currentUser?.displayName || 'Usuario';
-      
-      if (hour < 12) return `Buenos días, ${name}`;
-      else if (hour < 18) return `Buenas tardes, ${name}`;
-      else return `Buenas noches, ${name}`;
-    };
-    setGreeting(getGreeting());
+    const hour = new Date().getHours();
+    const name = userProfile?.name || currentUser?.displayName || 'Usuario';
+    
+    if (hour < 12) setGreeting(`Buenos días, ${name}`);
+    else if (hour < 18) setGreeting(`Buenas tardes, ${name}`);
+    else setGreeting(`Buenas noches, ${name}`);
   }, [userProfile?.name, currentUser?.displayName]);
 
   // Cargar datos de la pareja
-  const loadPartnerData = useCallback(async () => {
-    if (!userProfile?.partnerId) {
+  useEffect(() => {
+    if (!currentUser) {
       setLoading(false);
       return;
     }
 
-    const partnerId = userProfile.partnerId;
+    // Escuchar cambios en el perfil del usuario para detectar partnerId
+    const userRef = ref(database, `users/${currentUser.uid}`);
+    
+    const unsubUser = onValue(userRef, async (userSnapshot) => {
+      if (!userSnapshot.exists()) {
+        setLoading(false);
+        return;
+      }
 
-    try {
-      // Cargar períodos
+      const userData = userSnapshot.val();
+      const partnerId = userData.partnerId;
+
+      if (!partnerId) {
+        setLoading(false);
+        return;
+      }
+
+      // Cargar perfil de la pareja
+      const partnerRef = ref(database, `users/${partnerId}`);
+      onValue(partnerRef, (snapshot) => {
+        if (snapshot.exists()) {
+          setPartnerData(snapshot.val());
+        }
+      });
+
+      // Cargar períodos de la pareja
       const periodsRef = ref(database, `periods/${partnerId}`);
       onValue(periodsRef, (snapshot) => {
         if (snapshot.exists()) {
@@ -71,27 +94,88 @@ const DashboardMale = () => {
         setLoading(false);
       });
 
-      // Cargar síntomas recientes
+      // Cargar síntomas
       const symptomsRef = ref(database, `symptoms/${partnerId}`);
       onValue(symptomsRef, (snapshot) => {
         if (snapshot.exists()) {
           const data = Object.entries(snapshot.val()).map(([id, val]) => ({ id, ...val }));
-          setPartnerSymptoms(data.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt)));
+          setPartnerSymptoms(data.sort((a, b) => new Date(b.createdAt || 0) - new Date(a.createdAt || 0)));
         } else {
           setPartnerSymptoms([]);
         }
       });
-    } catch (error) {
-      console.error('Error cargando datos de pareja:', error);
+
+    }, (err) => {
+      console.error('Error:', err);
       setLoading(false);
+    });
+
+    return () => unsubUser();
+  }, [currentUser]);
+
+  // FUNCIÓN PRINCIPAL: Vincular con código
+  const linkWithCode = async () => {
+    const code = linkCode.trim().toUpperCase();
+    if (!code || code.length !== 6) {
+      toast.error('Ingresa un código de 6 caracteres');
+      return;
     }
-  }, [userProfile?.partnerId]);
 
-  useEffect(() => {
-    loadPartnerData();
-  }, [loadPartnerData]);
+    setLinking(true);
+    try {
+      // Buscar el código en la base de datos
+      const codeRef = ref(database, `linkCodes/${code}`);
+      const codeSnapshot = await get(codeRef);
 
-  // Calcular fase actual de la pareja
+      if (!codeSnapshot.exists()) {
+        toast.error('Código no válido o expirado');
+        setLinking(false);
+        return;
+      }
+
+      const codeData = codeSnapshot.val();
+      const partnerId = codeData.odwifeId;
+      const partnerName = codeData.odwifeName;
+      const partnerEmail = codeData.odwifeEmail;
+
+      // Verificar que no sea el mismo usuario
+      if (partnerId === currentUser.uid) {
+        toast.error('No puedes vincularte contigo mismo');
+        setLinking(false);
+        return;
+      }
+
+      const now = new Date().toISOString();
+      const myName = userProfile?.name || currentUser?.displayName || currentUser?.email;
+
+      // 1. Actualizar MI perfil (usuario masculino)
+      await set(ref(database, `users/${currentUser.uid}/partnerId`), partnerId);
+      await set(ref(database, `users/${currentUser.uid}/partnerEmail`), partnerEmail);
+      await set(ref(database, `users/${currentUser.uid}/partnerName`), partnerName);
+      await set(ref(database, `users/${currentUser.uid}/linkedAt`), now);
+
+      // 2. Actualizar perfil de la PAREJA (usuario femenino)
+      await set(ref(database, `users/${partnerId}/partnerId`), currentUser.uid);
+      await set(ref(database, `users/${partnerId}/partnerEmail`), currentUser.email);
+      await set(ref(database, `users/${partnerId}/partnerName`), myName);
+      await set(ref(database, `users/${partnerId}/linkedAt`), now);
+
+      // 3. Marcar código como usado
+      await set(ref(database, `linkCodes/${code}/usedBy`), currentUser.uid);
+      await set(ref(database, `linkCodes/${code}/usedAt`), now);
+
+      toast.success(`¡Vinculado exitosamente con ${partnerName}!`);
+      setLinkCode('');
+      
+    } catch (err) {
+      console.error('Error vinculando:', err);
+      toast.error('Error al vincular: ' + err.message);
+    } finally {
+      setLinking(false);
+    }
+  };
+
+  // Calcular fase actual
   const getCurrentPhase = () => {
     if (!partnerPeriods.length) return null;
     
@@ -99,14 +183,13 @@ const DashboardMale = () => {
     const today = new Date();
     const periodStart = parseISO(lastPeriod.startDate);
     const dayOfCycle = differenceInDays(today, periodStart) + 1;
-    const cycleLength = 28; // promedio
     
-    if (dayOfCycle <= 0 || dayOfCycle > cycleLength + 7) return { phase: 'unknown', day: 0 };
+    if (dayOfCycle <= 0 || dayOfCycle > 35) return { phase: 'unknown', day: 0 };
     
     if (dayOfCycle <= 5) return { phase: 'menstruation', day: dayOfCycle, name: 'Menstruación', color: 'red', icon: '🔴' };
     if (dayOfCycle <= 13) return { phase: 'follicular', day: dayOfCycle, name: 'Fase Folicular', color: 'green', icon: '🌱' };
     if (dayOfCycle <= 15) return { phase: 'ovulation', day: dayOfCycle, name: 'Ovulación', color: 'yellow', icon: '🥚' };
-    if (dayOfCycle <= cycleLength) return { phase: 'luteal', day: dayOfCycle, name: 'Fase Lútea', color: 'purple', icon: '🌙' };
+    if (dayOfCycle <= 28) return { phase: 'luteal', day: dayOfCycle, name: 'Fase Lútea', color: 'purple', icon: '🌙' };
     
     return { phase: 'late', day: dayOfCycle, name: 'Período Tardío', color: 'red', icon: '⚠️' };
   };
@@ -141,12 +224,10 @@ const DashboardMale = () => {
     return tips[phase] || tips.unknown;
   };
 
-  // Días hasta próximo período
   const getDaysUntilPeriod = () => {
     if (!partnerPredictions?.nextPeriod?.startDate) return null;
     const nextPeriod = parseISO(partnerPredictions.nextPeriod.startDate);
-    const today = new Date();
-    return Math.max(0, differenceInDays(nextPeriod, today));
+    return Math.max(0, differenceInDays(nextPeriod, new Date()));
   };
 
   const currentPhase = getCurrentPhase();
@@ -163,8 +244,8 @@ const DashboardMale = () => {
     );
   }
 
-  // Si no tiene pareja vinculada
-  if (!userProfile?.partnerId || !partnerProfile) {
+  // PANTALLA DE VINCULACIÓN - Si no tiene pareja
+  if (!userProfile?.partnerId || !partnerData) {
     return (
       <div className="min-h-screen bg-gradient-to-br from-blue-50 via-white to-indigo-50">
         <header className="sticky top-0 z-20 bg-white/70 backdrop-blur-xl border-b border-white/20">
@@ -178,30 +259,68 @@ const DashboardMale = () => {
           </div>
         </header>
 
-        <main className="max-w-3xl mx-auto px-4 py-16">
-          <div className="bg-white/80 backdrop-blur-xl rounded-3xl shadow-xl border border-white/60 p-8 text-center">
-            <div className="w-24 h-24 bg-gradient-to-br from-blue-100 to-indigo-100 rounded-full flex items-center justify-center mx-auto mb-6">
-              <Users className="w-12 h-12 text-blue-500" />
+        <main className="max-w-lg mx-auto px-4 py-12">
+          <div className="bg-white rounded-3xl shadow-xl border border-gray-100 p-8 text-center">
+            <div className="w-20 h-20 bg-gradient-to-br from-pink-100 to-purple-100 rounded-full flex items-center justify-center mx-auto mb-6">
+              <Link2 className="w-10 h-10 text-pink-500" />
             </div>
-            <h2 className="text-2xl font-bold text-gray-900 mb-4">Esperando conexión</h2>
-            <p className="text-gray-600 mb-6 max-w-md mx-auto">
-              Tu pareja aún no ha compartido su ciclo contigo. Pídele que te invite desde su perfil 
-              usando tu correo electrónico: <strong>{currentUser?.email}</strong>
+            
+            <h2 className="text-2xl font-bold text-gray-900 mb-2">Conecta con tu pareja</h2>
+            <p className="text-gray-600 mb-8">
+              Ingresa el código de 6 caracteres que tu pareja generó desde su cuenta
             </p>
-            <div className="bg-blue-50 rounded-2xl p-6 text-left">
-              <h3 className="font-semibold text-blue-900 mb-3">¿Cómo funciona?</h3>
-              <ol className="space-y-2 text-sm text-blue-800">
-                <li className="flex items-start gap-2">
+
+            {/* Input del código */}
+            <div className="mb-6">
+              <div className="flex justify-center gap-2 mb-4">
+                <input
+                  type="text"
+                  value={linkCode}
+                  onChange={(e) => setLinkCode(e.target.value.toUpperCase().slice(0, 6))}
+                  placeholder="ABC123"
+                  maxLength={6}
+                  className="w-full max-w-xs text-center text-3xl font-mono font-bold tracking-widest px-4 py-4 border-2 border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-pink-500 focus:border-pink-500 uppercase"
+                  onKeyDown={(e) => e.key === 'Enter' && linkWithCode()}
+                />
+              </div>
+              
+              <button
+                onClick={linkWithCode}
+                disabled={linking || linkCode.length !== 6}
+                className="w-full max-w-xs mx-auto flex items-center justify-center gap-2 bg-gradient-to-r from-pink-500 to-purple-600 text-white py-4 px-6 rounded-xl font-semibold hover:from-pink-600 hover:to-purple-700 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                {linking ? (
+                  <>
+                    <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                    <span>Conectando...</span>
+                  </>
+                ) : (
+                  <>
+                    <Key className="w-5 h-5" />
+                    <span>Vincular cuenta</span>
+                  </>
+                )}
+              </button>
+            </div>
+
+            {/* Instrucciones */}
+            <div className="bg-blue-50 rounded-2xl p-6 text-left mt-8">
+              <h3 className="font-semibold text-blue-900 mb-3 flex items-center gap-2">
+                <Users className="w-5 h-5" />
+                ¿Cómo obtener el código?
+              </h3>
+              <ol className="space-y-3 text-sm text-blue-800">
+                <li className="flex items-start gap-3">
                   <span className="w-6 h-6 bg-blue-500 text-white rounded-full flex items-center justify-center text-xs font-bold shrink-0">1</span>
-                  Tu pareja debe tener una cuenta con perfil femenino
+                  <span>Tu pareja abre la app con su cuenta femenina</span>
                 </li>
-                <li className="flex items-start gap-2">
+                <li className="flex items-start gap-3">
                   <span className="w-6 h-6 bg-blue-500 text-white rounded-full flex items-center justify-center text-xs font-bold shrink-0">2</span>
-                  Desde su perfil, selecciona "Invitar a mi pareja"
+                  <span>Va a <strong>Compartir Ciclo</strong> → <strong>Pareja</strong></span>
                 </li>
-                <li className="flex items-start gap-2">
+                <li className="flex items-start gap-3">
                   <span className="w-6 h-6 bg-blue-500 text-white rounded-full flex items-center justify-center text-xs font-bold shrink-0">3</span>
-                  Ingresa tu correo electrónico para conectarse
+                  <span>Hace clic en <strong>"Generar código"</strong> y te lo comparte</span>
                 </li>
               </ol>
             </div>
@@ -211,224 +330,111 @@ const DashboardMale = () => {
     );
   }
 
+  // DASHBOARD CONECTADO - Muestra datos de la pareja
   return (
     <div className="min-h-screen bg-gradient-to-br from-blue-50 via-white to-indigo-50">
-      {/* Header */}
       <header className="sticky top-0 z-20 bg-white/70 backdrop-blur-xl border-b border-white/20">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex items-center justify-between h-20">
             <div>
-              <div className="flex items-center gap-2 mb-1">
-                <h1 className="text-2xl font-bold text-gray-900">{greeting}</h1>
-                <Sparkles className="w-5 h-5 text-blue-500 animate-pulse" />
-              </div>
-              <p className="text-sm text-gray-500 flex items-center gap-2">
-                <Calendar className="w-4 h-4" />
-                {format(new Date(), "EEEE, d 'de' MMMM", { locale: es })}
-              </p>
+              <h1 className="text-2xl font-bold text-gray-900">{greeting}</h1>
+              <p className="text-sm text-gray-500">{format(new Date(), "EEEE, d 'de' MMMM", { locale: es })}</p>
             </div>
-            <div className="flex items-center gap-3">
-              <div className="text-right">
-                <p className="text-sm text-gray-500">Conectado con</p>
-                <p className="font-semibold text-gray-900">{partnerProfile.name || 'Tu pareja'}</p>
-              </div>
-              <div className="w-12 h-12 bg-gradient-to-br from-pink-500 to-purple-600 rounded-full flex items-center justify-center">
-                <span className="text-lg font-bold text-white">
-                  {partnerProfile.name?.charAt(0) || 'P'}
-                </span>
-              </div>
+            <div className="flex items-center gap-2 bg-pink-100 px-3 py-2 rounded-full">
+              <Heart className="w-4 h-4 text-pink-500" />
+              <span className="text-sm font-medium text-pink-700">{partnerData?.name || 'Tu pareja'}</span>
             </div>
           </div>
         </div>
       </header>
 
-      <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-          {/* Columna principal */}
-          <div className="lg:col-span-2 space-y-6">
-            {/* Estado actual de la pareja */}
-            <div className="bg-white/80 backdrop-blur-xl rounded-3xl shadow-lg border border-white/60 p-6">
-              <h2 className="text-lg font-bold text-gray-900 mb-4 flex items-center gap-2">
-                <Heart className="w-5 h-5 text-pink-500" />
-                Estado actual de {partnerProfile.name || 'tu pareja'}
-              </h2>
-              
-              {currentPhase ? (
-                <div className={`bg-gradient-to-r ${
-                  currentPhase.phase === 'menstruation' ? 'from-red-50 to-pink-50 border-red-200' :
-                  currentPhase.phase === 'follicular' ? 'from-green-50 to-emerald-50 border-green-200' :
-                  currentPhase.phase === 'ovulation' ? 'from-yellow-50 to-amber-50 border-yellow-200' :
-                  currentPhase.phase === 'luteal' ? 'from-purple-50 to-violet-50 border-purple-200' :
-                  'from-gray-50 to-slate-50 border-gray-200'
-                } rounded-2xl p-6 border`}>
-                  <div className="flex items-center justify-between mb-4">
-                    <div className="flex items-center gap-3">
-                      <span className="text-4xl">{currentPhase.icon}</span>
-                      <div>
-                        <h3 className="text-xl font-bold text-gray-900">{currentPhase.name}</h3>
-                        <p className="text-gray-600">Día {currentPhase.day} del ciclo</p>
-                      </div>
-                    </div>
-                    {daysUntilPeriod !== null && (
-                      <div className="text-right">
-                        <p className="text-3xl font-bold text-gray-900">{daysUntilPeriod}</p>
-                        <p className="text-sm text-gray-500">días para período</p>
-                      </div>
-                    )}
-                  </div>
-
-                  {/* Barra de progreso del ciclo */}
-                  <div className="mt-4">
-                    <div className="flex justify-between text-xs text-gray-500 mb-1">
-                      <span>Inicio</span>
-                      <span>Día {currentPhase.day} de ~28</span>
-                    </div>
-                    <div className="h-2 bg-gray-200 rounded-full overflow-hidden">
-                      <div 
-                        className={`h-full rounded-full transition-all ${
-                          currentPhase.phase === 'menstruation' ? 'bg-red-500' :
-                          currentPhase.phase === 'follicular' ? 'bg-green-500' :
-                          currentPhase.phase === 'ovulation' ? 'bg-yellow-500' :
-                          'bg-purple-500'
-                        }`}
-                        style={{ width: `${Math.min(100, (currentPhase.day / 28) * 100)}%` }}
-                      />
-                    </div>
-                  </div>
-                </div>
-              ) : (
-                <div className="bg-gray-50 rounded-2xl p-6 text-center">
-                  <p className="text-gray-500">No hay datos de ciclo disponibles aún</p>
-                </div>
-              )}
+      <main className="max-w-4xl mx-auto px-4 py-8 space-y-6">
+        {/* Tarjeta principal - Fase actual */}
+        {currentPhase && currentPhase.phase !== 'unknown' && (
+          <div className={`bg-white rounded-3xl shadow-lg border p-6 ${
+            currentPhase.phase === 'menstruation' ? 'border-red-200' :
+            currentPhase.phase === 'ovulation' ? 'border-yellow-200' :
+            currentPhase.phase === 'luteal' ? 'border-purple-200' :
+            'border-green-200'
+          }`}>
+            <div className="flex items-center justify-between mb-4">
+              <div>
+                <p className="text-sm text-gray-500">Fase actual de {partnerData?.name}</p>
+                <h2 className="text-2xl font-bold text-gray-900 flex items-center gap-2">
+                  <span>{currentPhase.icon}</span>
+                  {currentPhase.name}
+                </h2>
+              </div>
+              <div className="text-right">
+                <p className="text-3xl font-bold text-gray-900">Día {currentPhase.day}</p>
+                <p className="text-sm text-gray-500">del ciclo</p>
+              </div>
             </div>
 
-            {/* Consejos para la pareja */}
-            {currentPhase && (
-              <div className="bg-white/80 backdrop-blur-xl rounded-3xl shadow-lg border border-white/60 p-6">
-                <h2 className="text-lg font-bold text-gray-900 mb-4 flex items-center gap-2">
-                  <Sparkles className="w-5 h-5 text-yellow-500" />
-                  Consejos para ti
-                </h2>
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                  {getPhaseTips(currentPhase.phase).map((tip, index) => (
-                    <div key={index} className="bg-gradient-to-br from-blue-50 to-indigo-50 rounded-2xl p-4 border border-blue-100">
-                      <tip.icon className="w-8 h-8 text-blue-500 mb-3" />
-                      <p className="text-sm text-gray-700">{tip.text}</p>
-                    </div>
-                  ))}
+            {/* Tips */}
+            <div className="grid gap-3 mt-4">
+              {getPhaseTips(currentPhase.phase).map((tip, index) => (
+                <div key={index} className="flex items-center gap-3 bg-gray-50 rounded-xl p-3">
+                  <tip.icon className="w-5 h-5 text-pink-500 shrink-0" />
+                  <span className="text-sm text-gray-700">{tip.text}</span>
                 </div>
-              </div>
-            )}
-
-            {/* Síntomas recientes */}
-            {partnerSymptoms.length > 0 && (
-              <div className="bg-white/80 backdrop-blur-xl rounded-3xl shadow-lg border border-white/60 p-6">
-                <h2 className="text-lg font-bold text-gray-900 mb-4 flex items-center gap-2">
-                  <Activity className="w-5 h-5 text-purple-500" />
-                  Síntomas recientes
-                </h2>
-                <div className="space-y-3">
-                  {partnerSymptoms.slice(0, 5).map((symptom, index) => (
-                    <div key={index} className="flex items-center gap-4 p-3 bg-purple-50 rounded-xl">
-                      <div className="w-2 h-2 bg-purple-500 rounded-full"></div>
-                      <div className="flex-1">
-                        <p className="text-sm font-medium text-gray-900">
-                          {symptom.symptoms?.join(', ') || 'Síntoma registrado'}
-                        </p>
-                        <p className="text-xs text-gray-500">
-                          {symptom.date || format(new Date(symptom.createdAt), 'd MMM', { locale: es })}
-                        </p>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            )}
+              ))}
+            </div>
           </div>
+        )}
 
-          {/* Sidebar */}
-          <div className="space-y-6">
-            {/* Recordatorios */}
-            <div className="bg-white/80 backdrop-blur-xl rounded-3xl shadow-lg border border-white/60 p-6">
-              <h3 className="text-lg font-bold text-gray-900 mb-4 flex items-center gap-2">
-                <Bell className="w-5 h-5 text-blue-500" />
-                Recordatorios
-              </h3>
-              <div className="space-y-3">
-                {daysUntilPeriod !== null && daysUntilPeriod <= 3 && (
-                  <div className="flex items-center gap-3 p-3 bg-red-50 rounded-xl border border-red-100">
-                    <AlertCircle className="w-5 h-5 text-red-500" />
-                    <div>
-                      <p className="text-sm font-semibold text-red-900">Período próximo</p>
-                      <p className="text-xs text-red-700">En {daysUntilPeriod} días</p>
-                    </div>
-                  </div>
+        {/* Próximo período */}
+        {daysUntilPeriod !== null && (
+          <div className="bg-white rounded-2xl shadow-lg border border-gray-100 p-6">
+            <div className="flex items-center gap-4">
+              <div className="w-14 h-14 bg-red-100 rounded-2xl flex items-center justify-center">
+                <Calendar className="w-7 h-7 text-red-500" />
+              </div>
+              <div>
+                <p className="text-sm text-gray-500">Próximo período</p>
+                <p className="text-xl font-bold text-gray-900">
+                  {daysUntilPeriod === 0 ? 'Hoy' : 
+                   daysUntilPeriod === 1 ? 'Mañana' : 
+                   `En ${daysUntilPeriod} días`}
+                </p>
+                {partnerPredictions?.nextPeriod?.startDate && (
+                  <p className="text-sm text-gray-500">
+                    {format(parseISO(partnerPredictions.nextPeriod.startDate), "d 'de' MMMM", { locale: es })}
+                  </p>
                 )}
-                <div className="flex items-center gap-3 p-3 bg-blue-50 rounded-xl border border-blue-100">
-                  <MessageSquare className="w-5 h-5 text-blue-500" />
-                  <div>
-                    <p className="text-sm font-semibold text-blue-900">Envía un mensaje</p>
-                    <p className="text-xs text-blue-700">Muestra que te importa</p>
-                  </div>
-                </div>
               </div>
-            </div>
-
-            {/* Leyenda de fases */}
-            <div className="bg-white/80 backdrop-blur-xl rounded-3xl shadow-lg border border-white/60 p-6">
-              <h3 className="text-lg font-bold text-gray-900 mb-4">Fases del ciclo</h3>
-              <div className="space-y-3">
-                <div className="flex items-center gap-3">
-                  <div className="w-4 h-4 bg-red-500 rounded-full"></div>
-                  <div>
-                    <p className="text-sm font-medium text-gray-900">Menstruación</p>
-                    <p className="text-xs text-gray-500">Días 1-5</p>
-                  </div>
-                </div>
-                <div className="flex items-center gap-3">
-                  <div className="w-4 h-4 bg-green-500 rounded-full"></div>
-                  <div>
-                    <p className="text-sm font-medium text-gray-900">Fase Folicular</p>
-                    <p className="text-xs text-gray-500">Días 6-13</p>
-                  </div>
-                </div>
-                <div className="flex items-center gap-3">
-                  <div className="w-4 h-4 bg-yellow-500 rounded-full"></div>
-                  <div>
-                    <p className="text-sm font-medium text-gray-900">Ovulación</p>
-                    <p className="text-xs text-gray-500">Días 14-15</p>
-                  </div>
-                </div>
-                <div className="flex items-center gap-3">
-                  <div className="w-4 h-4 bg-purple-500 rounded-full"></div>
-                  <div>
-                    <p className="text-sm font-medium text-gray-900">Fase Lútea</p>
-                    <p className="text-xs text-gray-500">Días 16-28</p>
-                  </div>
-                </div>
-              </div>
-            </div>
-
-            {/* Info de la pareja */}
-            <div className="bg-gradient-to-br from-pink-50 to-purple-50 rounded-3xl p-6 border border-pink-100">
-              <div className="flex items-center gap-4 mb-4">
-                <div className="w-14 h-14 bg-gradient-to-br from-pink-500 to-purple-600 rounded-full flex items-center justify-center">
-                  <span className="text-xl font-bold text-white">
-                    {partnerProfile.name?.charAt(0) || 'P'}
-                  </span>
-                </div>
-                <div>
-                  <p className="font-bold text-gray-900">{partnerProfile.name || 'Tu pareja'}</p>
-                  <p className="text-sm text-gray-600">{partnerProfile.email}</p>
-                </div>
-              </div>
-              <p className="text-sm text-gray-600">
-                Conectados desde el {format(new Date(userProfile?.partnerId ? new Date() : Date.now()), "d 'de' MMMM", { locale: es })}
-              </p>
             </div>
           </div>
-        </div>
+        )}
+
+        {/* Síntomas recientes */}
+        {partnerSymptoms.length > 0 && (
+          <div className="bg-white rounded-2xl shadow-lg border border-gray-100 p-6">
+            <h3 className="font-semibold text-gray-900 mb-4 flex items-center gap-2">
+              <Activity className="w-5 h-5 text-purple-500" />
+              Síntomas recientes
+            </h3>
+            <div className="flex flex-wrap gap-2">
+              {partnerSymptoms.slice(0, 5).map((symptom, index) => (
+                <span key={index} className="bg-purple-100 text-purple-700 px-3 py-1 rounded-full text-sm">
+                  {symptom.type || symptom.name || 'Síntoma'}
+                </span>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {/* Mensaje si no hay datos */}
+        {!currentPhase && partnerPeriods.length === 0 && (
+          <div className="bg-white rounded-2xl shadow-lg border border-gray-100 p-8 text-center">
+            <Sparkles className="w-12 h-12 text-gray-300 mx-auto mb-4" />
+            <h3 className="text-lg font-semibold text-gray-700 mb-2">Esperando datos</h3>
+            <p className="text-gray-500">
+              {partnerData?.name} aún no ha registrado información de su ciclo.
+              Los datos aparecerán aquí cuando los registre.
+            </p>
+          </div>
+        )}
       </main>
     </div>
   );
