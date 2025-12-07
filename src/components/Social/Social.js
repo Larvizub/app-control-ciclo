@@ -35,9 +35,6 @@ const Social = () => {
     // Filtrar usuarios en línea que sean amigos o pareja
     return onlineUsers.filter(user => allowedIds.includes(user.userId));
   }, [friends, onlineUsers, userProfile?.partnerId]);
-  
-  const [newFriendEmail, setNewFriendEmail] = useState('');
-  const [activeTab, setActiveTab] = useState('friends');
 
   const handleSendFriendRequest = async (e) => {
     e.preventDefault();
