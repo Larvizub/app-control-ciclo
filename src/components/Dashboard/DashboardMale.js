@@ -1,11 +1,13 @@
 // src/components/Dashboard/DashboardMale.js
 import React, { useState, useEffect } from 'react';
 import { useAuth } from '../../contexts/AuthContext';
+import { useNotifications, NOTIFICATION_TYPES } from '../../contexts/NotificationContext';
 import { ref, onValue, get, set } from 'firebase/database';
 import { database } from '../../config/firebase';
 import toast from 'react-hot-toast';
 import { format, parseISO, differenceInDays } from 'date-fns';
 import { es } from 'date-fns/locale';
+import { v4 as uuidv4 } from 'uuid';
 import {
   Heart, 
   Calendar, 
@@ -23,6 +25,7 @@ import {
 
 const DashboardMale = () => {
   const { currentUser, userProfile } = useAuth();
+  const { createNotification } = useNotifications();
   const [partnerData, setPartnerData] = useState(null);
   const [partnerPeriods, setPartnerPeriods] = useState([]);
   const [partnerPredictions, setPartnerPredictions] = useState(null);
@@ -163,6 +166,56 @@ const DashboardMale = () => {
       // 3. Marcar código como usado
       await set(ref(database, `linkCodes/${code}/usedBy`), currentUser.uid);
       await set(ref(database, `linkCodes/${code}/usedAt`), now);
+
+      // 4. Crear amistad bidireccional para que aparezcan en Social
+      const friendshipData = {
+        odwifeId: currentUser.uid,
+        status: 'accepted',
+        type: 'partner',
+        createdAt: now
+      };
+      const reverseFriendshipData = {
+        odwifeId: partnerId,
+        status: 'accepted',
+        type: 'partner',
+        createdAt: now
+      };
+      await set(ref(database, `friendships/${currentUser.uid}/${partnerId}`), friendshipData);
+      await set(ref(database, `friendships/${partnerId}/${currentUser.uid}`), reverseFriendshipData);
+
+      // 5. Crear chat entre la pareja
+      const chatId = uuidv4();
+      const chatData = {
+        id: chatId,
+        participants: [currentUser.uid, partnerId],
+        type: 'partner',
+        createdAt: now,
+        lastMessage: '¡Se han vinculado como pareja! 💕',
+        lastActivity: now,
+        lastSender: 'system'
+      };
+      await set(ref(database, `chats/${chatId}`), chatData);
+
+      // Mensaje inicial del sistema
+      const welcomeMessageId = uuidv4();
+      const welcomeMessage = {
+        id: welcomeMessageId,
+        senderId: 'system',
+        senderName: 'Sistema',
+        message: `¡${myName} y ${partnerName} ahora están vinculados como pareja! 💕`,
+        type: 'system',
+        timestamp: now,
+        read: false
+      };
+      await set(ref(database, `messages/${chatId}/${welcomeMessageId}`), welcomeMessage);
+
+      // 6. Crear notificación para la pareja
+      await createNotification(
+        partnerId,
+        NOTIFICATION_TYPES.PARTNER_LINKED,
+        `¡${myName} se ha vinculado contigo como pareja!`,
+        { odwifeId: currentUser.uid, chatId }
+      );
 
       toast.success(`¡Vinculado exitosamente con ${partnerName}!`);
       setLinkCode('');
