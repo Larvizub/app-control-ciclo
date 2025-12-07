@@ -8,6 +8,7 @@ import { HelmetProvider } from 'react-helmet-async';
 import { AuthProvider } from './contexts/AuthContext';
 import { CycleProvider } from './contexts/CycleContext';
 import { SocialProvider } from './contexts/SocialContext';
+import { NotificationProvider } from './contexts/NotificationContext';
 
 // Components
 import Layout from './components/Layout/Layout';
@@ -103,7 +104,8 @@ function App() {
       <AuthProvider>
         <CycleProvider>
           <SocialProvider>
-            <div className="App">
+            <NotificationProvider>
+              <div className="App">
               <RouterProvider router={router} future={{ v7_startTransition: true, v7_relativeSplatPath: true }} />
 
               {/* Notificaciones Toast */}
@@ -137,7 +139,8 @@ function App() {
                   },
                 }}
               />
-            </div>
+              </div>
+            </NotificationProvider>
           </SocialProvider>
         </CycleProvider>
       </AuthProvider>
