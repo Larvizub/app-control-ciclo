@@ -6,7 +6,7 @@ import QuickNoteModal from '../Modals/QuickNoteModal';
 import { useSocial } from '../../contexts/SocialContext';
 import { ref, onValue } from 'firebase/database';
 import { database } from '../../config/firebase';
-import { Calendar as CalendarIcon, Plus, MessageSquare, Sparkles, ChevronLeft, ChevronRight, Heart, Users } from 'lucide-react';
+import { Calendar as CalendarIcon, Plus, MessageSquare, Sparkles, ChevronLeft, ChevronRight, Users } from 'lucide-react';
 import { format, startOfMonth, endOfMonth, eachDayOfInterval, isSameDay, parseISO, differenceInDays } from 'date-fns';
 import { es } from 'date-fns/locale';
 import clsx from 'clsx';
@@ -201,18 +201,6 @@ const Calendar = () => {
       )}></div>
       <div className="fixed bottom-20 left-10 w-96 h-96 bg-gradient-to-br from-indigo-200/20 to-blue-200/20 rounded-full blur-3xl pointer-events-none"></div>
 
-      {/* Banner para usuario masculino */}
-      {isMaleUser && userProfile?.partnerId && (
-        <div className="bg-gradient-to-r from-blue-500 to-indigo-600 text-white px-4 py-3">
-          <div className="max-w-7xl mx-auto flex items-center gap-3">
-            <Heart className="w-5 h-5" />
-            <span className="font-medium">
-              Viendo el calendario de {userProfile?.partnerName || 'tu pareja'}
-            </span>
-          </div>
-        </div>
-      )}
-
       {/* Mensaje si no tiene pareja vinculada */}
       {isMaleUser && !userProfile?.partnerId && (
         <div className="max-w-7xl mx-auto px-4 py-8">
@@ -229,31 +217,31 @@ const Calendar = () => {
         </div>
       )}
 
-      {/* Header */}
+      {/* Contenido del calendario */}
       {(!isMaleUser || userProfile?.partnerId) && (
-      <header className="bg-white/80 backdrop-blur-xl shadow-soft border-b border-gray-200/60 sticky top-0 z-40">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="flex items-center justify-between h-20">
-            <div className="flex items-center gap-4">
-              <div className={clsx(
-                "w-12 h-12 rounded-2xl flex items-center justify-center shadow-lg",
-                isMaleUser ? "bg-gradient-to-br from-blue-500 to-indigo-600" : "bg-gradient-to-br from-pink-500 to-purple-600"
-              )}>
-                <CalendarIcon className="w-6 h-6 text-white" />
-              </div>
-              <div>
-                <h1 className={clsx(
-                  "text-2xl font-bold bg-clip-text text-transparent",
-                  isMaleUser ? "bg-gradient-to-r from-blue-600 to-indigo-600" : "bg-gradient-to-r from-pink-600 to-purple-600"
-                )}>
-                  {isMaleUser ? 'Calendario de Pareja' : 'Mi Calendario'}
-                </h1>
-                <p className="text-sm text-gray-500">
-                  {isMaleUser ? `Ciclo de ${userProfile?.partnerName || 'tu pareja'}` : 'Seguimiento de tu ciclo'}
-                </p>
-              </div>
+      <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
+        {/* Header con título y botón de agregar nota */}
+        <div className="flex items-center justify-between mb-6">
+          <div className="flex items-center gap-4">
+            <div className={clsx(
+              "w-12 h-12 rounded-2xl flex items-center justify-center shadow-lg",
+              isMaleUser ? "bg-gradient-to-br from-blue-500 to-indigo-600" : "bg-gradient-to-br from-pink-500 to-purple-600"
+            )}>
+              <CalendarIcon className="w-6 h-6 text-white" />
             </div>
-            {!isMaleUser && (
+            <div>
+              <h1 className={clsx(
+                "text-2xl font-bold bg-clip-text text-transparent",
+                isMaleUser ? "bg-gradient-to-r from-blue-600 to-indigo-600" : "bg-gradient-to-r from-pink-600 to-purple-600"
+              )}>
+                {isMaleUser ? 'Calendario de Pareja' : 'Mi Calendario'}
+              </h1>
+              <p className="text-sm text-gray-500">
+                {isMaleUser ? `Ciclo de ${userProfile?.partnerName || 'tu pareja'}` : 'Seguimiento de tu ciclo'}
+              </p>
+            </div>
+          </div>
+          {!isMaleUser && (
             <button
               onClick={() => {
                 if (!selectedDate) {
@@ -266,14 +254,9 @@ const Calendar = () => {
               <Plus className="w-4 h-4" />
               <span>Agregar Nota</span>
             </button>
-            )}
-          </div>
+          )}
         </div>
-      </header>
-      )}
 
-      {(!isMaleUser || userProfile?.partnerId) && (
-      <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         <div className="grid grid-cols-1 lg:grid-cols-4 gap-8">
           {/* Calendario principal */}
           <div className="lg:col-span-3">

@@ -102,17 +102,17 @@ const TopBar = () => {
 
   return (
     <header className="sticky top-0 z-40 bg-white/80 backdrop-blur-xl border-b border-gray-100 shadow-sm">
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-        <div className="flex items-center justify-between h-14 sm:h-16">
+      <div className="px-4 sm:px-6 lg:px-8">
+        <div className="flex items-center justify-between h-20">
           {/* Título de la página */}
           <div className="flex items-center gap-3">
-            <h1 className="text-lg sm:text-xl font-bold text-gray-900">
+            <h1 className="text-xl sm:text-2xl font-bold text-gray-900">
               {getPageTitle()}
             </h1>
           </div>
 
           {/* Acciones */}
-          <div className="flex items-center gap-2 sm:gap-4">
+          <div className="flex items-center gap-3 sm:gap-4">
             {/* Saludo (solo desktop) */}
             <span className="hidden sm:block text-sm text-gray-600">
               Hola, <span className="font-medium text-gray-900">{userProfile?.name?.split(' ')[0] || 'Usuario'}</span>
@@ -123,10 +123,10 @@ const TopBar = () => {
               <button
                 onClick={toggleNotifications}
                 className={clsx(
-                  'relative p-2 sm:p-2.5 rounded-xl transition-all duration-200',
+                  'relative p-2.5 sm:p-3 rounded-xl transition-all duration-200',
                   isOpen 
                     ? 'bg-primary-100 text-primary-600' 
-                    : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                    : 'bg-gray-100 text-gray-600 hover:bg-gray-200 hover:scale-105'
                 )}
                 aria-label="Notificaciones"
               >
@@ -248,7 +248,7 @@ const TopBar = () => {
             {/* Avatar del usuario (solo desktop) */}
             <Link 
               to="/profile"
-              className="hidden sm:flex w-9 h-9 rounded-full bg-gradient-to-br from-primary-500 to-secondary-500 items-center justify-center text-white font-bold text-sm shadow-md hover:shadow-lg transition-shadow"
+              className="hidden sm:flex w-10 h-10 rounded-xl bg-gradient-to-br from-primary-500 to-secondary-500 items-center justify-center text-white font-bold text-base shadow-md hover:shadow-lg hover:scale-105 transition-all"
             >
               {userProfile?.name?.charAt(0) || 'U'}
             </Link>
